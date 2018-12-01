@@ -2,26 +2,31 @@ data {
   int<lower=0> N;
   int y[N];
   int n[N];
-  int state[N];
-  int state_no;
+  int division[N];
+  int division_no;
 }
 
 parameters {
-  vector[state_no] theta;
+  vector[division_no] theta;
+  real phi_param;
+  real<lower = 0> lambda;
 }
 
 model {
   for(i in 1:N){
-    y[i] ~ binomial(n[i], inv_logit(theta[state[i]]));
+    y[i] ~ binomial(n[i], inv_logit(theta[division[i]]));
   }
-  for(j in 1:state_no){
-    theta[j] ~ normal(0,100);
-  }
+  theta     ~ normal(phi_param, lambda);
+  phi_param ~ normal(0, 10);
+  lambda    ~ gamma(0.001, 0.001);
 }
 
 generated quantities{
   int yn[N];
   for(i in 1:N){
-    yn[i]  = binomial_rng(n[i], inv_logit(theta[state[i]]));
+    yn[i]  = binomial_rng(
+      n[i],
+      inv_logit(theta[division[i]])
+      );
   }
 }

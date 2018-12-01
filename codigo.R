@@ -25,18 +25,25 @@ names(df) <- read_table(
   pull(var_names) %>% 
   make.names()
 
+estados <- read_csv("estados_regiones") %>% 
+  select(`State Code`, Division) %>% 
+  rename(State = `State Code`)
+
+
 x <- df %>% 
+  left_join(estados, by = "State") %>% 
   mutate(
-    State = State %>% as.factor %>% as.numeric
+    State = State %>% as.factor,
+    Division = Division %>% as.factor
   ) %>% 
-  select(State, murders, pop, communityname) %>% 
+  select(State, murders, pop, Division) %>% 
   na.omit()
 
 
 # Primer Modelo -----------------------------------------------------------
 
 primer_modelo <- stan_model(
-  here::here("modelo_poisson.stan")
+  here::here("modelo_1.stan")
 )
 
 
@@ -46,8 +53,8 @@ z <- sampling(
     N = nrow(x),
     y = x$murders,
     n = x$pop,
-    state = x$State,
-    state_no = length(unique(x$State))
+    division = as.numeric(x$Division),
+    division_no = length(unique(x$Division))
   ),
   chains = 1,
   iter = 2000,
@@ -57,28 +64,15 @@ z <- sampling(
   )
 )
 
-prediction <- rstan::extract(z, "yn")$yn %>% 
-  as_tibble() %>% 
-  summarise_all(median) %>% 
-  t()
-
-x %>% 
-  mutate(
-    prediccion = prediction,
-    mape   = abs(murders - prediccion),
-    ecm = (murders - prediccion) ^ 2
-  ) %>% 
-  summarise(mape = mean(mape), ecm = mean(ecm))
-
-# Segundo Modelo ----------------------------------------------------------
-
-stan_glmer(
-  formula = murders ~ (1 | communityname | State),
-  data = x,
-  family = binomial,
-  offset = pop
+bayesplot::mcmc_areas(
+  x = as.array(z),
+  pars= paste("theta[",1:length(unique(x$Division)),"]", sep = "")
 )
 
+x$Division %>% 
+  levels()
+
+# Segundo Modelo ----------------------------------------------------------
 
 segundo_modelo <- stan_model(here::here("modelo_2.stan"))
 

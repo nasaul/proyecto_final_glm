@@ -35,7 +35,7 @@ x <- df %>%
   left_join(estados, by = "State") %>% 
   mutate(
     State = State %>% as.factor,
-    Division = Division %>% as.factor,
+    Division = Division %>% as.factor
   ) %>% 
   select(
     State,
@@ -47,7 +47,7 @@ x <- df %>%
     pctPoverty,
     pct12.17w2Par,
     pctNotSpeakEng,
-    pctBornStateResid,
+    pctBornStateResid
     # pctPolicWhite,
     # pctPolicBlack,
     # officDrugUnits
@@ -63,142 +63,6 @@ division <- x %>%
       Division = as.numeric(Division)
   ) %>% 
   pull(Division)
-
-modelo_tres <- readRDS(here::here("Resultados/modelo_tres.rds"))
-
-predice(modelo_tres) %>% 
-  mutate(
-    rmse = (muertes - mediana)^2,
-    mape = abs(muertes - mediana)
-  ) %>% 
-  summarise_at(
-    vars(c(rmse, mape)),
-    mean
-  )
-
-beta0    <- extract(modelo_tres, pars = "beta0")$beta0 
-
-beta0_df <- tibble(
-  media   = apply(beta0, MARGIN = 2, FUN = mean),
-  mediana = apply(beta0, MARGIN = 2, FUN = median),
-  int_baj = apply(beta0, MARGIN = 2, FUN = quantile, probs = 0.025),
-  int_al  = apply(beta0, MARGIN = 2, FUN = quantile, probs = 0.975),
-  ymin    = apply(beta0, MARGIN = 2, FUN = min),
-  ymax    = apply(beta0, MARGIN = 2, FUN = max),
-  state   = levels(x$State)
-) %>% 
-  mutate_if(
-    is.numeric,
-    function(x){
-      1 - exp(-exp(x))
-    }
-  )
-
-ggplot(
-  data = beta0_df,
-  aes(
-    x = state
-  )
-) +
-  geom_boxplot(
-    aes(
-      ymin   = ymin,
-      lower  = int_baj,
-      middle = media,
-      upper  = int_al,
-      ymax   = ymax
-    ),
-    stat = "identity"
-  ) + 
-  coord_flip() +
-  theme_bw() +
-  labs(
-    x        = "Probabilidad",
-    y        = "Estado",
-    title    = "Probabilidad base de asesinato",
-    subtitle = "Efectos por estado"
-  )
-
-theta    <- extract(modelo_tres, pars = "theta")$theta
-
-theta_df <- tibble(
-  media   = apply(theta, MARGIN = 2, FUN = mean),
-  mediana = apply(theta, MARGIN = 2, FUN = median),
-  int_baj = apply(theta, MARGIN = 2, FUN = quantile, probs = 0.025),
-  int_al  = apply(theta, MARGIN = 2, FUN = quantile, probs = 0.975),
-  ymin    = apply(theta, MARGIN = 2, FUN = min),
-  ymax    = apply(theta, MARGIN = 2, FUN = max),
-  div     = levels(x$Division)
-) %>% 
-  mutate_if(
-    is.numeric,
-    function(x){
-      1 - exp(-exp(x))
-    }
-  )
-
-ggplot(
-  data = theta_df,
-  aes(
-    x = div
-  )
-) +
-  geom_boxplot(
-    aes(
-      ymin   = ymin,
-      lower  = int_baj,
-      middle = media,
-      upper  = int_al,
-      ymax   = ymax
-    ),
-    stat = "identity"
-  ) + 
-  coord_flip() +
-  theme_bw() +
-  labs(
-    x        = "Probabilidad",
-    y        = "Estado",
-    title    = "Probabilidad base de asesinato",
-    subtitle = "Efectos por división"
-  )
-
-beta <- extract(modelo_tres, pars = "beta")$beta
-cov_names <- x %>% 
-  select(-c(State, murders, pop, Division)) %>% 
-  names
-beta_df <- tibble(
-  media   = apply(beta, MARGIN = 2, FUN = mean),
-  mediana = apply(beta, MARGIN = 2, FUN = median),
-  int_baj = apply(beta, MARGIN = 2, FUN = quantile, probs = 0.025),
-  int_al  = apply(beta, MARGIN = 2, FUN = quantile, probs = 0.975),
-  ymin    = apply(beta, MARGIN = 2, FUN = min),
-  ymax    = apply(beta, MARGIN = 2, FUN = max),
-  var     = cov_names
-) 
-
-ggplot(
-  data = beta_df,
-  aes(
-    x = var
-  )
-) +
-  geom_boxplot(
-    aes(
-      ymin   = ymin,
-      lower  = int_baj,
-      middle = media,
-      upper  = int_al,
-      ymax   = ymax
-    ),
-    stat = "identity"
-  ) + 
-  coord_flip() +
-  theme_bw() +
-  labs(
-    title = "Parámetros asociados a cada variable",
-    x = ""
-  )
-
 
 # Segundo modelo ----------------------------------------------------------
 

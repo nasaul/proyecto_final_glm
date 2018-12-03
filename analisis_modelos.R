@@ -50,7 +50,7 @@ x <- df %>%
   left_join(estados, by = "State") %>% 
   mutate(
     State = State %>% as.factor,
-    Division = Division %>% as.factor,
+    Division = Division %>% as.factor
   ) %>% 
   select(
     State,
@@ -62,7 +62,7 @@ x <- df %>%
     pctPoverty,
     pct12.17w2Par,
     pctNotSpeakEng,
-    pctBornStateResid,
+    pctBornStateResid
     # pctPolicWhite,
     # pctPolicBlack,
     # officDrugUnits

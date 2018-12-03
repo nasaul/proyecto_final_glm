@@ -19,46 +19,55 @@ predice <- function(modelo, nombre, liga){
   return(y)
 }
 
-calculateDIC <-  function(y, theta_post, llFun) {
-  #Calculate L
-  theta_hat = apply(theta_post, 2, mean)
-  L = llFun(y, theta_hat)
-  
-  #Calculate P
-  S = nrow(theta_post) #S = number of iterations
-  #Add up the log likelihoods of each iteration
-  llSum = 0
-  for (s in 1:S) {
-    theta_s = as.numeric(theta_post[s,])
-    llSum = llSum + llFun(y, theta_s)
-  }
-  P = 2 * (L - (1 / S * llSum))
-  
-  #Calculate DIC
-  DIC = -2 * (L - P)
-  
-  #Return the results
-  list(DIC=DIC, P=P, L=L)
-}
+# calculateDIC <-  function(y, theta_post, llFun) {
+#   #Calculate L
+#   theta_hat = apply(theta_post, 2, mean)
+#   L = llFun(y, theta_hat)
+#   
+#   #Calculate P
+#   S = nrow(theta_post) #S = number of iterations
+#   #Add up the log likelihoods of each iteration
+#   llSum = 0
+#   for (s in 1:S) {
+#     theta_s = as.numeric(theta_post[s,])
+#     llSum = llSum + llFun(y, theta_s)
+#   }
+#   P = 2 * (L - (1 / S * llSum))
+#   
+#   #Calculate DIC
+#   DIC = -2 * (L - P)
+#   
+#   #Return the results
+#   list(DIC=DIC, P=P, L=L)
+# }
+# 
+# likelihood_func <- function(y, theta, modelo, liga){
+#   x <- theta[as.numeric(x$Division)]
+#   if(liga == "logit"){
+#     y <- log(x/(1 - x))
+#   } else if(liga == "probit"){
+#     y <- 
+#   } else if(liga == "loglog"){
+#     y <- exp(-exp(x))
+#   } else if(liga == "cloglog"){
+#     y <- 1 - exp(-exp(x))
+#   }
+# } 
 
-likelihood_func <- function(y, theta, modelo, liga){
-  x <- theta
-} 
-
-logit_likelihood <- function(y, theta){
-  x <- theta[1] + theta[2] * df$x50 + theta[3] * df$x100 +
-    theta[4] * df$x200 + theta[5] * df$x500
-  z <-  exp(x) / (1 + exp(x))
-  sum(dbinom(y, size = df$C, prob = z, log = TRUE))
-}
-
-
-cloglog_likelihood <- function(y, theta){
-  x <- theta[1] + theta[2] * df$x50 + theta[3] * df$x100 +
-    theta[4] * df$x200 + theta[5] * df$x500
-  z <-  1 - exp(-exp(x))
-  sum(dbinom(y, size = df$C, prob = z, log = TRUE))
-}
+# logit_likelihood <- function(y, theta){
+#   x <- theta[1] + theta[2] * df$x50 + theta[3] * df$x100 +
+#     theta[4] * df$x200 + theta[5] * df$x500
+#   z <-  exp(x) / (1 + exp(x))
+#   sum(dbinom(y, size = df$C, prob = z, log = TRUE))
+# }
+# 
+# 
+# cloglog_likelihood <- function(y, theta){
+#   x <- theta[1] + theta[2] * df$x50 + theta[3] * df$x100 +
+#     theta[4] * df$x200 + theta[5] * df$x500
+#   z <-  1 - exp(-exp(x))
+#   sum(dbinom(y, size = df$C, prob = z, log = TRUE))
+# }
 
 # Lectura de datos --------------------------------------------------------
 library(dplyr)
@@ -172,7 +181,7 @@ bin_loglog <- sampling(
 
 # Distribución Poisson ----------------------------------------------------
 
-pois_logit <- sampling(
+pois <- sampling(
   intercepto_variante,
   data = list(
     N            = nrow(x),
@@ -180,53 +189,8 @@ pois_logit <- sampling(
     n            = x$pop,
     division     = as.numeric(x$Division),
     division_no  = 9L,
-    liga         = 1L, # Liga Logit
-    distribucion = 2L  # Distribución binomial
-  ),
-  warmup = 500,
-	seed = 984984 
-)
-
-pois_probit <- sampling(
-  intercepto_variante,
-  data = list(
-    N            = nrow(x),
-    y            = x$murders,
-    n            = x$pop,
-    division     = as.numeric(x$Division),
-    division_no  = 9L,
-    liga         = 2L, # Liga Probit
-    distribucion = 2L  # Distribución binomial
-  ),
-  warmup = 500,
-	seed = 984984 
-)
-
-pois_cloglog <- sampling(
-  intercepto_variante,
-  data = list(
-    N            = nrow(x),
-    y            = x$murders,
-    n            = x$pop,
-    division     = as.numeric(x$Division),
-    division_no  = 9L,
-    liga         = 3L, # Liga Complementaria log-log
-    distribucion = 2L  # Distribución binomial
-  ),
-  warmup = 500,
-	seed = 984984 
-)
-
-pois_loglog <- sampling(
-  intercepto_variante,
-  data = list(
-    N            = nrow(x),
-    y            = x$murders,
-    n            = x$pop,
-    division     = as.numeric(x$Division),
-    division_no  = 9L,
-    liga         = 4L, # Liga log-log
-    distribucion = 2L  # Distribución binomial
+    liga         = 5L, # Liga Exponencial
+    distribucion = 2L  # Distribución poisson
   ),
   warmup = 500,
 	seed = 984984 
@@ -252,24 +216,18 @@ predicciones <- predice(
     by = c("media", "mediana", "modelo", "liga", "muertes")
   ) %>% 
   full_join(
-    predice(pois_logit, "Poisson", "Logit"),
-    by = c("media", "mediana", "modelo", "liga", "muertes")
-  ) %>% 
-  full_join(
-    predice(pois_loglog, "Poisson", "Log-Log"),
-    by = c("media", "mediana", "modelo", "liga", "muertes")
-  ) %>% 
-  full_join(
-    predice(pois_cloglog, "Poisson", "CLog-Log"),
-    by = c("media", "mediana", "modelo", "liga", "muertes")
-  ) %>% 
-  full_join(
-    predice(pois_probit, "Poisson", "Probit"),
+    predice(pois, "Poisson", "Exponencial"),
     by = c("media", "mediana", "modelo", "liga", "muertes")
   )
 
 predicciones %>% 
-  ggplot(aes(x = muertes, y = mediana, colour = liga)) +
+  ggplot(
+    aes(
+      x = muertes,
+      y = mediana,
+      colour = liga
+    )
+  ) +
   geom_point() +
   facet_wrap(liga~modelo)
 

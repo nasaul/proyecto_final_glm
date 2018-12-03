@@ -1,47 +1,67 @@
 data {
-  int<lower=0> N;
-  int y[N];
-  int n[N];
-  int state[N];
-  int state_no;
-  int K;
-  matrix[N,K] X;
+  int<lower=0> N;  // Tamaño de los datos
+  int y[N];        // Número de asesinados
+  int n[N];        // Offset
+  int L;           // Número de estados
+  int state[N];    // Estados
+  int division[L]; // Divisiones
+  int division_no; // Número de division
+  int P;           // Número de covariables
+  matrix[N,P] X;   // Matriz de covariables
 }
 
 parameters {
-  // Interceptos
-  vector[N] beta0; // Condado
-  vector[state_no] theta0; // Estado
-  vector<lower = 0>[state_no] theta0_sd; // Estado
-  // Variables explicativas
-  matrix[N, K] beta; // Condado
-  vector[state_no] theta; // Estado
-  vector<lower = 0>[state_no] theta_sd; // Estado
+  vector[L] beta0;
+  vector[division_no] theta0;
+  vector<lower = 0>[division_no] theta0_sd;
+  real phi_param;
+  real<lower = 0> lambda;
+  matrix[L, P] beta;
+  matrix[division_no, P] theta;
+  matrix<lower = 0>[division_no, P] theta_sd;
+  vector[P] cov_hiper;
+  vector[P] cov_sd_hiper;
 }
 
 model {
+  // Verosimilitud 
   for(i in 1:N){
-    y[i]     ~ binomial(
+    y[i]~ binomial(
       n[i],
-      inv_logit(
-        beta0[i] +
-        dot_product(row(X, i), row(beta, i))
-        )
+      1 - exp(-exp(beta0[state[i]] + dot_product(row(X, i), row(beta, state[i]))))
       );
-    beta0[i] ~ normal(
-      theta0[state[i]],
-      theta0_sd[state[i]]
-      );
-    
   }
-  beta0    ~ normal(0, 10);
-  theta0   ~ normal(0, 10);
-  theta_sd ~ gamma(0.001, 0.001);
+  // Cambio de estado a division
+  for(j in 1:L){
+    beta0[j] ~ normal(
+      theta0[division[j]],
+      theta0_sd[division[j]]
+      );
+      for(p in 1:P){
+        beta[j, p] ~ normal(
+          theta[division_no, p],
+          theta_sd[division_no, p]
+        );
+      }
+  }
+  // Cambio de division a hiperparámetros
+  theta0    ~ normal(phi_param, lambda);
+  for(p in 1:P){
+    theta[, p] ~ normal(cov_hiper[p], cov_sd_hiper);
+  }
+  // Priors vagas
+  phi_param ~ normal(0, 10);
+  cov_hiper ~ normal(0, 10);
+
 }
 
 generated quantities{
   int yn[N];
   for(i in 1:N){
-    yn[i] = binomial_rng(n[i], inv_logit(beta0[i] + dot_product(row(X, i), beta)));
+    yn[i] = binomial_rng(
+      n[i],
+      1 - exp(-exp(beta0[state[i]] + dot_product(row(X, i), row(beta, state[i]))))
+      )
+      ;
   }
 }

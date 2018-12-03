@@ -14,41 +14,28 @@ parameters {
   vector<lower = 0>[division_no] theta_sd;
   real phi_param;
   real<lower = 0> lambda;
-  real<lower = 0> a;
-  real<lower = 0> b;
 }
 
 model {
   // Verosimilitud
   for(i in 1:N){
-    y[i] ~ binomial(
-      n[i],
-      inv_logit(beta0[state[i]])
-      );
+    y[i] ~ binomial(n[i], (1 - exp(-exp(beta0[state[i]]))));
   }
   // Cambio de estado a división
   for(j in 1:L){
-    beta0[j] ~ normal(
-      theta[division[j]],
-      theta_sd[division[j]]
-      );
+    beta0[j] ~ normal(theta[division[j]],theta_sd[division[j]]);
   }
   // Cambio de división  a hiperparámetros
   theta    ~ normal(phi_param, lambda);
-  theta_sd ~ gamma(a, b);
+  theta_sd ~ gamma(0.001, .001);
   // Priors vagas
   phi_param ~ normal(0, 10);
   lambda    ~ gamma(0.001, 0.001);
-  a ~ ;
-  b ~ ;
 }
 
 generated quantities{
   int yn[N];
   for(i in 1:N){
-    yn[i] = binomial_rng(
-      n[i],
-      inv_logit(beta0[i])
-      );
+    yn[i] = binomial_rng(n[i], (1 - exp(-exp(beta0[state[i]]))));
   }
 }

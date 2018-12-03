@@ -25,6 +25,8 @@ transformed parameters {
       prob[i] = 1 - exp(-exp(theta[division[i]]));
     } else if(liga == 4){
       prob[i] = exp(-exp(theta[division[i]]));
+    } else if(liga == 5){
+      prob[i] = exp(theta[division[i]]);
     }
   }
 }

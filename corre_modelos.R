@@ -117,11 +117,12 @@ modelo_tres <- sampling(
     X = as.matrix(xcov)
   ),
   warmup = 500,
-  iter = 2000,
-  seed = 12345,
+  iter = 3000,
+  seed = 123456,
   chains = 4,
+  thin = 2,
   control = list(
-    adapt_delta = 0.85
+    adapt_delta = 0.9
   )
 )
 

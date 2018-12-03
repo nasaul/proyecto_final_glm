@@ -81,7 +81,11 @@ modelo_dos <- sampling(
   ),
   warmup = 500,
   seed = 123456,
-  chains = 4
+  chains = 4,
+  thin = 2,
+  control = list(
+    adapt_delta = 0.85
+  )
 )
 
 saveRDS(
@@ -111,8 +115,9 @@ modelo_tres <- sampling(
   iter = 2000,
   seed = 12345,
   chains = 4,
+  thin = 2,
   control = list(
-    adapt_delta = 0.85
+    adapt_delta = 0.9
   )
 )
 

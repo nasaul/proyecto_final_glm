@@ -20,7 +20,7 @@ parameters {
   matrix[division_no, P] theta;
   matrix<lower = 0>[division_no, P] theta_sd;
   vector[P] cov_hiper;
-  vector[P] cov_sd_hiper;
+  vector<lower = 0>[P] cov_sd_hiper;
 }
 
 model {
@@ -39,15 +39,17 @@ model {
       );
       for(p in 1:P){
         beta[j, p] ~ normal(
-          theta[division_no, p],
-          theta_sd[division_no, p]
+          theta[division[j], p],
+          theta_sd[division[j], p]
         );
       }
   }
   // Cambio de division a hiperparámetros
   theta0    ~ normal(phi_param, lambda);
   for(p in 1:P){
-    theta[, p] ~ normal(cov_hiper[p], cov_sd_hiper);
+    for(i in 1:division_no){
+      theta[i, p] ~ normal(cov_hiper[p], cov_sd_hiper[p]);
+    }
   }
   // Priors vagas
   phi_param ~ normal(0, 10);

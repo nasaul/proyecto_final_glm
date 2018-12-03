@@ -150,12 +150,12 @@ modelo_cuatro <- sampling(
   ),
   warmup = 500,
   iter = 2000,
-  seed = 12345,
-  chains = 4
-  # control = list(
-  #   adapt_delta = 0.9999
-  # )
-  # algorithm = "HMC"
+  seed = 123456,
+  chains = 4,
+  thin = 3,
+  control = list(
+    adapt_delta = 0.9
+  )
 )
 modelo_cuatro
 

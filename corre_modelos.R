@@ -64,6 +64,11 @@ division <- x %>%
   ) %>% 
   pull(Division)
 
+xcov <- x %>% 
+  select(-c(State, murders, pop, Division)) %>% 
+  mutate_all(function(x) x /100) %>% 
+  as.matrix 
+
 # Segundo modelo ----------------------------------------------------------
 
 segundo_modelo <- stan_model(here::here("modelo_2.stan"))
@@ -108,16 +113,15 @@ modelo_tres <- sampling(
     state       = as.numeric(x$State),
     division    = division,
     division_no = 9,
-    P = ncol(cov),
-    X = as.matrix(cov)
+    P = ncol(xcov),
+    X = as.matrix(xcov)
   ),
   warmup = 500,
   iter = 2000,
   seed = 12345,
   chains = 4,
-  thin = 2,
   control = list(
-    adapt_delta = 0.9
+    adapt_delta = 0.85
   )
 )
 
@@ -140,8 +144,8 @@ modelo_cuatro <- sampling(
     state       = as.numeric(x$State),
     division    = division,
     division_no = 9L,
-    P = ncol(cov),
-    X = as.matrix(cov)
+    P = ncol(xcov),
+    X = as.matrix(xcov)
   ),
   warmup = 500,
   iter = 2000,

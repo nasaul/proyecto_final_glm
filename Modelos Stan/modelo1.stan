@@ -46,11 +46,18 @@ model {
 
 generated quantities{
   int yn[N];
+  vector[N] log_lik;
+
   if(distribucion == 1){
     yn = binomial_rng(n, prob);
+    for(i in 1:N){
+      log_lik[i] = binomial_lpmf(y[i] | n[i], prob[i]);
+    }
   } else {
     for(i in 1:N){
       yn[i] = poisson_rng(n[i] * prob[i]);
+      log_lik[i] = poisson_lpmf(y[i] | n[i] * prob[i]);
     }
   }
+
 }

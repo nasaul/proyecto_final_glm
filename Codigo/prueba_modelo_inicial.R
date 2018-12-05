@@ -19,61 +19,13 @@ predice <- function(modelo, nombre, liga){
   return(y)
 }
 
-# calculateDIC <-  function(y, theta_post, llFun) {
-#   #Calculate L
-#   theta_hat = apply(theta_post, 2, mean)
-#   L = llFun(y, theta_hat)
-#   
-#   #Calculate P
-#   S = nrow(theta_post) #S = number of iterations
-#   #Add up the log likelihoods of each iteration
-#   llSum = 0
-#   for (s in 1:S) {
-#     theta_s = as.numeric(theta_post[s,])
-#     llSum = llSum + llFun(y, theta_s)
-#   }
-#   P = 2 * (L - (1 / S * llSum))
-#   
-#   #Calculate DIC
-#   DIC = -2 * (L - P)
-#   
-#   #Return the results
-#   list(DIC=DIC, P=P, L=L)
-# }
-# 
-# likelihood_func <- function(y, theta, modelo, liga){
-#   x <- theta[as.numeric(x$Division)]
-#   if(liga == "logit"){
-#     y <- log(x/(1 - x))
-#   } else if(liga == "probit"){
-#     y <- 
-#   } else if(liga == "loglog"){
-#     y <- exp(-exp(x))
-#   } else if(liga == "cloglog"){
-#     y <- 1 - exp(-exp(x))
-#   }
-# } 
-
-# logit_likelihood <- function(y, theta){
-#   x <- theta[1] + theta[2] * df$x50 + theta[3] * df$x100 +
-#     theta[4] * df$x200 + theta[5] * df$x500
-#   z <-  exp(x) / (1 + exp(x))
-#   sum(dbinom(y, size = df$C, prob = z, log = TRUE))
-# }
-# 
-# 
-# cloglog_likelihood <- function(y, theta){
-#   x <- theta[1] + theta[2] * df$x50 + theta[3] * df$x100 +
-#     theta[4] * df$x200 + theta[5] * df$x500
-#   z <-  1 - exp(-exp(x))
-#   sum(dbinom(y, size = df$C, prob = z, log = TRUE))
-# }
-
 # Lectura de datos --------------------------------------------------------
 library(dplyr)
 library(readr)
 library(rstan)
 library(bayesplot)
+library(loo)
+library(purrr)
 rstan_options(auto_write = TRUE)
 options(mc.cores = parallel::detectCores())
 
@@ -233,11 +185,29 @@ predicciones %>%
   geom_point() +
   facet_wrap(liga~modelo)
 
-predicciones %>% 
+performance <- tibble(
+  modelo = c(
+    bin_cloglog,
+    bin_logit, 
+    bin_loglog,
+    bin_probit,
+    pois
+  )
+) %>% 
   mutate(
-    rmse = (muertes - mediana)^2,
-    mape = abs(muertes - mediana)
+    nombre   = c(rep("Binomial", 4), "Poisson"),
+    liga     = c("Cloglog", "Logit", "Loglog", "Probit", "Exponencial"),
+    log_lik  = map(modelo, extract_log_lik),
+    waic_obj = map(log_lik, waic),
+    waic     = map(waic_obj, ~.$waic) %>% flatten_dbl()
   ) %>% 
-  group_by(modelo, liga) %>% 
-  summarise_at(vars(c(rmse, mape)), mean) %>% View
+  select(
+    nombre, liga, waic
+  ) 
+
+saveRDS(
+  performance,
+  file = here::here("Resultados/desempeño_primeros_modelos.rds")
+)
+
 

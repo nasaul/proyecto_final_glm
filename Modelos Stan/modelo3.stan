@@ -19,13 +19,17 @@ parameters {
   vector[P] beta;
 }
 
+transformed parameters {
+  vector[N] prob;
+  for(i in 1:N){
+    prob[i] = exp(beta0[state[i]] + row(X, i) * beta);
+  }
+}
+
 model {
   // Verosimilitud 
   for(i in 1:N){
-    y[i]~ binomial(
-      n[i],
-      1 - exp(-exp(beta0[state[i]] + row(X, i) * beta))
-      );
+    y[i]~ poisson(n[i] * prob[i]);
   }
   // Cambio de estado a division
   for(j in 1:L){
@@ -45,11 +49,9 @@ model {
 
 generated quantities{
   int yn[N];
+  vector[N] log_lik;
   for(i in 1:N){
-    yn[i] = binomial_rng(
-      n[i],
-      1 - exp(-exp(beta0[state[i]] + row(X, i) * beta))
-      )
-      ;
+    yn[i]      = poisson_rng(n[i] * prob[i]);
+    log_lik[i] = poisson_lpmf(y[i] | n[i] * prob[i]);
   }
 }

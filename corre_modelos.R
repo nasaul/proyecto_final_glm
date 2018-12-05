@@ -47,7 +47,10 @@ x <- df %>%
     pctPoverty,
     pct12.17w2Par,
     pctNotSpeakEng,
-    pctBornStateResid
+    pctBornStateResid,
+    pctNotHSgrad,
+    pctWorkMom.18,
+    pctFgnImmig.10
     # pctPolicWhite,
     # pctPolicBlack,
     # officDrugUnits

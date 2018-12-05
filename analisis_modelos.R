@@ -62,7 +62,10 @@ x <- df %>%
     pctPoverty,
     pct12.17w2Par,
     pctNotSpeakEng,
-    pctBornStateResid
+    pctBornStateResid,
+    pctNotHSgrad,
+    pctWorkMom.18,
+    pctFgnImmig.10
     # pctPolicWhite,
     # pctPolicBlack,
     # officDrugUnits
@@ -421,18 +424,21 @@ ggplot(
     subtitle = "Efectos por división"
   )
 
-beta <- extract(modelo_cuatro, pars = "beta[")
+theta <- extract(modelo_cuatro, pars = "theta")$theta
 cov_names <- x %>% 
   select(-c(State, murders, pop, Division)) %>% 
   names
+
+#5 y 6
+
 beta_df <- tibble(
-  media   = apply(beta, MARGIN = 2, FUN = mean),
-  mediana = apply(beta, MARGIN = 2, FUN = median),
-  int_baj = apply(beta, MARGIN = 2, FUN = quantile, probs = 0.025),
-  int_al  = apply(beta, MARGIN = 2, FUN = quantile, probs = 0.975),
-  ymin    = apply(beta, MARGIN = 2, FUN = min),
-  ymax    = apply(beta, MARGIN = 2, FUN = max),
-  var     = cov_names
+  media   = apply(theta[, , 6], MARGIN = 2, FUN = mean),
+  mediana = apply(theta[, , 6], MARGIN = 2, FUN = median),
+  int_baj = apply(theta[, , 6], MARGIN = 2, FUN = quantile, probs = 0.025),
+  int_al  = apply(theta[, , 6], MARGIN = 2, FUN = quantile, probs = 0.975),
+  ymin    = apply(theta[, , 6], MARGIN = 2, FUN = min),
+  ymax    = apply(theta[, , 6], MARGIN = 2, FUN = max),
+  var     = levels(x$Division)
 ) 
 
 ggplot(
@@ -454,7 +460,7 @@ ggplot(
   coord_flip() +
   theme_bw() +
   labs(
-    title = "Parámetros asociados a cada variable",
+    title = "",
     x = ""
   )
 

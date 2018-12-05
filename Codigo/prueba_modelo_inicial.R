@@ -84,7 +84,7 @@ df <- read_csv(
 )
 
 names(df) <- read_table(
-  here::here("nombres.txt"),
+  here::here("Datos/nombres.txt"),
   col_names = FALSE
 ) %>% 
   mutate(
@@ -97,7 +97,9 @@ names(df) <- read_table(
   pull(var_names) %>% 
   make.names()
 
-estados <- read_csv("estados_regiones") %>% 
+estados <- read_csv(
+  here::here("Datos/estados_regiones")
+) %>% 
   select(`State Code`, Division) %>% 
   rename(State = `State Code`)
 
@@ -114,7 +116,7 @@ x <- df %>%
 # Modelo Stan -------------------------------------------------------------
 
 intercepto_variante <- stan_model(
-  here::here("modelo_1.stan")
+  here::here("Modelos Stan/modelo1.stan")
 )
 
 # Distribución Binomial ---------------------------------------------------

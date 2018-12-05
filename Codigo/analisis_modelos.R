@@ -28,7 +28,7 @@ df <- read_csv(
 )
 
 names(df) <- read_table(
-  here::here("nombres.txt"),
+  here::here("Datos/nombres.txt"),
   col_names = FALSE
 ) %>% 
   mutate(
@@ -41,7 +41,9 @@ names(df) <- read_table(
   pull(var_names) %>% 
   make.names()
 
-estados <- read_csv("estados_regiones") %>% 
+estados <- read_csv(
+  here::here("Datos/estados_regiones")
+) %>% 
   select(`State Code`, Division) %>% 
   rename(State = `State Code`)
 
@@ -85,7 +87,9 @@ division <- x %>%
 # Modelo dos --------------------------------------------------------------
 
 
-modelo_dos <- readRDS(here::here("Resultados/modelo_dos.rds"))
+modelo_dos <- readRDS(
+  here::here("Resultados/modelo_dos.rds")
+)
 
 predice(modelo_dos) %>% 
   mutate(
@@ -186,7 +190,9 @@ ggplot(
 
 # Modelo Tres -------------------------------------------------------------
 
-modelo_tres <- readRDS(here::here("Resultados/modelo_tres.rds"))
+modelo_tres <- readRDS(
+  here::here("Resultados/modelo_tres.rds")
+)
 
 predice(modelo_tres) %>% 
   mutate(

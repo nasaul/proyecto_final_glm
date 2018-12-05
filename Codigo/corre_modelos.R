@@ -13,7 +13,7 @@ df <- read_csv(
 )
 
 names(df) <- read_table(
-  here::here("nombres.txt"),
+  here::here("Datos/nombres.txt"),
   col_names = FALSE
 ) %>% 
   mutate(
@@ -26,7 +26,9 @@ names(df) <- read_table(
   pull(var_names) %>% 
   make.names()
 
-estados <- read_csv("estados_regiones") %>% 
+estados <- read_csv(
+  here::here("Datos/estados_regiones")
+  ) %>% 
   select(`State Code`, Division) %>% 
   rename(State = `State Code`)
 
@@ -74,7 +76,9 @@ xcov <- x %>%
 
 # Segundo modelo ----------------------------------------------------------
 
-segundo_modelo <- stan_model(here::here("modelo_2.stan"))
+segundo_modelo <- stan_model(
+  here::here("Modelos Stan/modelo2.stan")
+  )
 
 modelo_dos <- sampling(
   segundo_modelo,
@@ -104,7 +108,9 @@ saveRDS(
 
 # Tercer modelo -----------------------------------------------------------
 
-tercer_modelo <- stan_model(here::here("modelo_3.stan"))
+tercer_modelo <- stan_model(
+  here::here("Modelos Stan/modelo3.stan")
+  )
 
 modelo_tres <- sampling(
   tercer_modelo,
@@ -136,7 +142,9 @@ saveRDS(
 
 # Cuarto Modelo -----------------------------------------------------------
 
-cuarto_modelo <- stan_model(here::here("modelo_4.stan"))
+cuarto_modelo <- stan_model(
+  here::here("Modelos Stan/modelo4.stan")
+)
 
 modelo_cuatro <- sampling(
   cuarto_modelo,

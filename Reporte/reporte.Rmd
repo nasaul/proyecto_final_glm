@@ -1,0 +1,26 @@
+---
+title:    "Proyecto Final Regresión Avanzada"
+subtitle: "Análisis Jerárquico de asesinatos en EUA"
+author:  
+  - "Ana Luisa Masetto Herrera"
+  - "Arantza Ivonne Pineda Sandoval"
+  - "Ixchel Meza Chávez"
+  - "Saúl Caballero Ramírez"
+output: 
+  pdf_document:
+    number_sections: true
+    toc_depth: 2
+fontsize: 12pt
+documentclass: "article"
+lang: "es"
+---
+
+\tableofcontents
+
+\pagebreak
+
+# Introducción
+
+# Análisis Exploratorio de los Datos 
+
+

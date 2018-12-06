@@ -9,7 +9,7 @@ data {
 }
 
 parameters {
-  vector[L] beta0; 
+  vector[L] beta0;
   vector[division_no] theta;
   vector<lower = 0>[division_no] theta_sd;
   real phi_param;

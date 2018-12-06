@@ -27,7 +27,7 @@ transformed parameters {
 }
 
 model {
-  // Verosimilitud 
+  // Verosimilitud
   for(i in 1:N){
     y[i]~ poisson(n[i] * prob[i]);
   }
@@ -42,7 +42,7 @@ model {
   theta    ~ normal(phi_param, lambda);
   // theta_sd ~ gamma(0.001, 0.001);
   // Priors vagas
-  phi_param ~ normal(0, 1);
+  phi_param ~ normal(0, 10);
   // lambda    ~ gamma(0.001, 0.001);
   beta      ~ normal(0, 1);
 }

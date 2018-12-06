@@ -3,17 +3,19 @@ library(rstan)
 library(dplyr)
 library(ggplot2)
 library(readr)
+library(loo)
+library(purrr)
 
 predice <- function(modelo){
   y <- tibble(
-    media = extract(modelo, "yn")$yn %>% 
+    media = extract(modelo, "yn")$yn %>%
       apply(
-        MARGIN = 2, 
+        MARGIN = 2,
         FUN    = mean
       ),
-    mediana = extract(modelo, "yn")$yn %>% 
+    mediana = extract(modelo, "yn")$yn %>%
       apply(
-        MARGIN = 2, 
+        MARGIN = 2,
         FUN    = median
       ),
     muertes =  x$murders
@@ -30,39 +32,39 @@ df <- read_csv(
 names(df) <- read_table(
   here::here("Datos/nombres.txt"),
   col_names = FALSE
-) %>% 
+) %>%
   mutate(
     var_names = gsub(
-      "(.*) (.*)", 
+      "(.*) (.*)",
       "\\1",
       X2
     )
-  ) %>% 
-  pull(var_names) %>% 
+  ) %>%
+  pull(var_names) %>%
   make.names()
 
 estados <- read_csv(
   here::here("Datos/estados_regiones")
-) %>% 
-  select(`State Code`, Division) %>% 
+) %>%
+  select(`State Code`, Division) %>%
   rename(State = `State Code`)
 
 
-x <- df %>% 
-  left_join(estados, by = "State") %>% 
+x <- df %>%
+  left_join(estados, by = "State") %>%
   mutate(
     State = State %>% as.factor,
     Division = Division %>% as.factor
-  ) %>% 
+  ) %>%
   select(
     State,
     murders,
     pop,
     Division,
     pctBlack,
-    pctWhite,
+    # pctWhite,
     pctPoverty,
-    pct12.17w2Par,
+    # pct12.17w2Par,
     pctNotSpeakEng,
     pctBornStateResid,
     pctNotHSgrad,
@@ -71,17 +73,17 @@ x <- df %>%
     # pctPolicWhite,
     # pctPolicBlack,
     # officDrugUnits
-  ) %>% 
+  ) %>%
   na.omit()
 
-division <- x %>% 
-  group_by(State, Division) %>% 
-  summarise() %>% 
-  ungroup %>% 
+division <- x %>%
+  group_by(State, Division) %>%
+  summarise() %>%
+  ungroup %>%
   mutate(
     State = as.numeric(State),
     Division = as.numeric(Division)
-  ) %>% 
+  ) %>%
   pull(Division)
 
 # Modelo dos --------------------------------------------------------------
@@ -91,17 +93,17 @@ modelo_dos <- readRDS(
   here::here("Resultados/modelo_dos.rds")
 )
 
-predice(modelo_dos) %>% 
-  mutate(
-    rmse = (muertes - mediana)^2,
-    mape = abs(muertes - mediana)
-  ) %>% 
-  summarise_at(
-    vars(c(rmse, mape)),
-    mean
-  )
+predice(modelo_dos) %>%
+  ggplot(aes(x = muertes, y = mediana)) +
+  geom_point() +
+  geom_line(aes(x = seq(1, 2000, length.out = 2215), y = seq(1, 2000, length.out = 2215)))
 
-beta0    <- extract(modelo_dos, pars = "beta0")$beta0 
+modelo_dos %>%
+  extract_log_lik() %>%
+  waic() %>%
+  .$waic
+
+beta0    <- extract(modelo_dos, pars = "beta0")$beta0
 
 beta0_df <- tibble(
   media   = apply(beta0, MARGIN = 2, FUN = mean),
@@ -111,13 +113,7 @@ beta0_df <- tibble(
   ymin    = apply(beta0, MARGIN = 2, FUN = min),
   ymax    = apply(beta0, MARGIN = 2, FUN = max),
   state   = levels(x$State)
-) %>% 
-  mutate_if(
-    is.numeric,
-    function(x){
-      1 - exp(-exp(x))
-    }
-  )
+)
 
 ggplot(
   data = beta0_df,
@@ -125,16 +121,13 @@ ggplot(
     x = state
   )
 ) +
-  geom_boxplot(
+  geom_errorbar(
     aes(
-      ymin   = ymin,
-      lower  = int_baj,
-      middle = media,
-      upper  = int_al,
-      ymax   = ymax
-    ),
-    stat = "identity"
-  ) + 
+      ymin   = int_baj,
+      ymax   = int_al
+    )
+  ) +
+  geom_point(aes(y = mediana)) +
   coord_flip() +
   theme_bw() +
   labs(
@@ -154,30 +147,33 @@ theta_df <- tibble(
   ymin    = apply(theta, MARGIN = 2, FUN = min),
   ymax    = apply(theta, MARGIN = 2, FUN = max),
   div     = levels(x$Division)
-) %>% 
-  mutate_if(
-    is.numeric,
-    function(x){
-      1 - exp(-exp(x))
-    }
-  )
+)
+
+phi <- extract(modelo_dos, pars = "phi_param")$phi_param
+phi_df <- tibble(
+  media = mean(phi),
+  mediana = median(phi),
+  int_baj = quantile(phi, probs = 0.025),
+  int_al  = quantile(phi, probs = 0.975),
+  div = "EUA"
+)
 
 ggplot(
-  data = theta_df,
+  data = theta_df %>%
+    full_join(phi_df),
   aes(
     x = div
   )
 ) +
-  geom_boxplot(
+  geom_errorbar(
     aes(
-      ymin   = ymin,
-      lower  = int_baj,
-      middle = media,
-      upper  = int_al,
-      ymax   = ymax
-    ),
-    stat = "identity"
-  ) + 
+      ymin   = int_baj,
+      ymax   = int_al
+    )
+  ) +
+  geom_point(aes(y = mediana)) +
+  geom_hline(aes(yintercept = phi_df$int_baj), colour = "blue") +
+  geom_hline(aes(yintercept = phi_df$int_al), colour = "blue") +
   coord_flip() +
   theme_bw() +
   labs(
@@ -194,17 +190,18 @@ modelo_tres <- readRDS(
   here::here("Resultados/modelo_tres.rds")
 )
 
-predice(modelo_tres) %>% 
-  mutate(
-    rmse = (muertes - mediana)^2,
-    mape = abs(muertes - mediana)
-  ) %>% 
-  summarise_at(
-    vars(c(rmse, mape)),
-    mean
-  )
 
-beta0    <- extract(modelo_tres, pars = "beta0")$beta0 
+predice(modelo_tres) %>%
+  ggplot(aes(x = muertes, y = mediana)) +
+  geom_point() +
+  geom_line(aes(x = seq(1, 2000, length.out = 2215), y = seq(1, 2000, length.out = 2215)))
+
+modelo_tres %>%
+  extract_log_lik() %>%
+  waic() %>%
+  .$waic
+
+beta0    <- extract(modelo_tres, pars = "beta0")$beta0
 
 beta0_df <- tibble(
   media   = apply(beta0, MARGIN = 2, FUN = mean),
@@ -214,13 +211,7 @@ beta0_df <- tibble(
   ymin    = apply(beta0, MARGIN = 2, FUN = min),
   ymax    = apply(beta0, MARGIN = 2, FUN = max),
   state   = levels(x$State)
-) %>% 
-  mutate_if(
-    is.numeric,
-    function(x){
-      1 - exp(-exp(x))
-    }
-  )
+)
 
 ggplot(
   data = beta0_df,
@@ -228,16 +219,13 @@ ggplot(
     x = state
   )
 ) +
-  geom_boxplot(
+  geom_errorbar(
     aes(
-      ymin   = ymin,
-      lower  = int_baj,
-      middle = media,
-      upper  = int_al,
-      ymax   = ymax
-    ),
-    stat = "identity"
-  ) + 
+      ymin   = int_baj,
+      ymax   = int_al
+    )
+  ) +
+  geom_point(aes(y = mediana)) +
   coord_flip() +
   theme_bw() +
   labs(
@@ -257,30 +245,34 @@ theta_df <- tibble(
   ymin    = apply(theta, MARGIN = 2, FUN = min),
   ymax    = apply(theta, MARGIN = 2, FUN = max),
   div     = levels(x$Division)
-) %>% 
-  mutate_if(
-    is.numeric,
-    function(x){
-      1 - exp(-exp(x))
-    }
-  )
+)
+
+phi <- extract(modelo_tres, pars = "phi_param")$phi_param
+phi_df <- tibble(
+  media = mean(phi),
+  mediana = median(phi),
+  int_baj = quantile(phi, probs = 0.025),
+  int_al  = quantile(phi, probs = 0.975),
+  div = "EUA"
+)
 
 ggplot(
-  data = theta_df,
+  data = theta_df %>%
+    full_join(phi_df),
   aes(
     x = div
   )
+
 ) +
-  geom_boxplot(
+  geom_errorbar(
     aes(
-      ymin   = ymin,
-      lower  = int_baj,
-      middle = media,
-      upper  = int_al,
-      ymax   = ymax
-    ),
-    stat = "identity"
-  ) + 
+      ymin   = int_baj,
+      ymax   = int_al
+    )
+  ) +
+  geom_point(aes(y = mediana)) +
+  geom_hline(aes(yintercept = phi_df$int_baj), colour = "blue") +
+  geom_hline(aes(yintercept = phi_df$int_al), colour = "blue") +
   coord_flip() +
   theme_bw() +
   labs(
@@ -291,8 +283,8 @@ ggplot(
   )
 
 beta <- extract(modelo_tres, pars = "beta")$beta
-cov_names <- x %>% 
-  select(-c(State, murders, pop, Division)) %>% 
+cov_names <- x %>%
+  select(-c(State, murders, pop, Division)) %>%
   names
 beta_df <- tibble(
   media   = apply(beta, MARGIN = 2, FUN = mean),
@@ -302,7 +294,8 @@ beta_df <- tibble(
   ymin    = apply(beta, MARGIN = 2, FUN = min),
   ymax    = apply(beta, MARGIN = 2, FUN = max),
   var     = cov_names
-) 
+)
+
 
 ggplot(
   data = beta_df,
@@ -310,16 +303,14 @@ ggplot(
     x = var
   )
 ) +
-  geom_boxplot(
+  geom_errorbar(
     aes(
-      ymin   = ymin,
-      lower  = int_baj,
-      middle = media,
-      upper  = int_al,
-      ymax   = ymax
+      ymin   = int_baj,
+      ymax   = int_al
     ),
     stat = "identity"
-  ) + 
+  ) +
+  geom_point(aes(y = mediana)) +
   coord_flip() +
   theme_bw() +
   labs(
@@ -334,17 +325,22 @@ modelo_cuatro <- readRDS(
   here::here("Resultados/modelo_cuatro.rds")
 )
 
-predice(modelo_cuatro) %>% 
-  mutate(
-    rmse = (muertes - mediana)^2,
-    mape = abs(muertes - mediana)
-  ) %>% 
-  summarise_at(
-    vars(c(rmse, mape)),
-    mean
+predice(modelo_cuatro) %>%
+  ggplot(aes(x = muertes, y = mediana)) +
+  geom_point() +
+  geom_line(
+    aes(
+      x = seq(1, 2000, length.out = 2215),
+      y = seq(1, 2000, length.out = 2215)
+    )
   )
 
-beta0    <- extract(modelo_cuatro, pars = "beta0")$beta0 
+modelo_cuatro %>%
+  extract_log_lik() %>%
+  waic() %>%
+  .$waic
+
+beta0    <- extract(modelo_cuatro, pars = "beta0")$beta0
 
 beta0_df <- tibble(
   media   = apply(beta0, MARGIN = 2, FUN = mean),
@@ -354,13 +350,7 @@ beta0_df <- tibble(
   ymin    = apply(beta0, MARGIN = 2, FUN = min),
   ymax    = apply(beta0, MARGIN = 2, FUN = max),
   state   = levels(x$State)
-) %>% 
-  mutate_if(
-    is.numeric,
-    function(x){
-      1 - exp(-exp(x))
-    }
-  )
+)
 
 ggplot(
   data = beta0_df,
@@ -368,16 +358,14 @@ ggplot(
     x = state
   )
 ) +
-  geom_boxplot(
+  geom_errorbar(
     aes(
-      ymin   = ymin,
-      lower  = int_baj,
-      middle = media,
-      upper  = int_al,
-      ymax   = ymax
+      ymin   = int_baj,
+      ymax   = int_al
     ),
     stat = "identity"
-  ) + 
+  ) +
+  geom_point(aes(y = mediana)) +
   coord_flip() +
   theme_bw() +
   labs(
@@ -387,9 +375,9 @@ ggplot(
     subtitle = "Efectos por estado"
   )
 
-theta    <- extract(modelo_cuatro, pars = "theta")$theta
+theta0    <- extract(modelo_cuatro, pars = "theta0")$theta0
 
-theta_df <- tibble(
+theta0_df <- tibble(
   media   = apply(theta, MARGIN = 2, FUN = mean),
   mediana = apply(theta, MARGIN = 2, FUN = median),
   int_baj = apply(theta, MARGIN = 2, FUN = quantile, probs = 0.025),
@@ -397,30 +385,34 @@ theta_df <- tibble(
   ymin    = apply(theta, MARGIN = 2, FUN = min),
   ymax    = apply(theta, MARGIN = 2, FUN = max),
   div     = levels(x$Division)
-) %>% 
-  mutate_if(
-    is.numeric,
-    function(x){
-      1 - exp(-exp(x))
-    }
-  )
+)
+
+phi <- extract(modelo_cuatro, pars = "phi_param")$phi_param
+phi_df <- tibble(
+  media = mean(phi),
+  mediana = median(phi),
+  int_baj = quantile(phi, probs = 0.025),
+  int_al  = quantile(phi, probs = 0.975),
+  div = "EUA"
+)
 
 ggplot(
-  data = theta_df,
+  data = theta_df %>%
+    full_join(phi_df),
   aes(
     x = div
   )
 ) +
-  geom_boxplot(
+  geom_errorbar(
     aes(
-      ymin   = ymin,
-      lower  = int_baj,
-      middle = media,
-      upper  = int_al,
-      ymax   = ymax
+      ymin   = int_baj,
+      ymax   = int_al
     ),
     stat = "identity"
-  ) + 
+  ) +
+  geom_point(aes(y = mediana)) +
+  geom_hline(aes(yintercept = phi_df$int_baj), colour = "blue") +
+  geom_hline(aes(yintercept = phi_df$int_al), colour = "blue") +
   coord_flip() +
   theme_bw() +
   labs(
@@ -430,44 +422,78 @@ ggplot(
     subtitle = "Efectos por división"
   )
 
-theta <- extract(modelo_cuatro, pars = "theta")$theta
-cov_names <- x %>% 
-  select(-c(State, murders, pop, Division)) %>% 
+beta <- extract(modelo_cuatro, pars = "beta")$beta
+cov_names <- x %>%
+  select(-c(State, murders, pop, Division)) %>%
   names
 
-#5 y 6
+map(
+  1:7,
+  function(i){
+    beta_df <- tibble(
+      media   = apply(beta[, , i], MARGIN = 2, FUN = mean),
+      mediana = apply(beta[, , i], MARGIN = 2, FUN = median),
+      int_baj = apply(beta[, , i], MARGIN = 2, FUN = quantile, probs = 0.025),
+      int_al  = apply(beta[, , i], MARGIN = 2, FUN = quantile, probs = 0.975),
+      ymin    = apply(beta[, , i], MARGIN = 2, FUN = min),
+      ymax    = apply(beta[, , i], MARGIN = 2, FUN = max),
+      var     = levels(x$State)
+    )
+    p <- ggplot(
+      data = beta_df,
+      aes(
+        x = var
+      )
+    ) +
+      geom_errorbar(
+        aes(
+          ymin   = int_baj,
+          ymax   = int_al
+        )
+      ) +
+      geom_point(aes(y = mediana)) +
+      coord_flip() +
+      theme_bw() +
+      labs(
+        title = paste("Efecto por covariable:", cov_names[i]),
+        x = ""
+      )
+    print(p)
+  }
+)
 
-beta_df <- tibble(
-  media   = apply(theta[, , 6], MARGIN = 2, FUN = mean),
-  mediana = apply(theta[, , 6], MARGIN = 2, FUN = median),
-  int_baj = apply(theta[, , 6], MARGIN = 2, FUN = quantile, probs = 0.025),
-  int_al  = apply(theta[, , 6], MARGIN = 2, FUN = quantile, probs = 0.975),
-  ymin    = apply(theta[, , 6], MARGIN = 2, FUN = min),
-  ymax    = apply(theta[, , 6], MARGIN = 2, FUN = max),
-  var     = levels(x$Division)
-) 
 
-ggplot(
-  data = beta_df,
-  aes(
-    x = var
-  )
-) +
-  geom_boxplot(
-    aes(
-      ymin   = ymin,
-      lower  = int_baj,
-      middle = media,
-      upper  = int_al,
-      ymax   = ymax
-    ),
-    stat = "identity"
-  ) + 
-  coord_flip() +
-  theme_bw() +
-  labs(
-    title = "",
-    x = ""
-  )
+theta <- extract(modelo_cuatro, pars = "theta")$theta
 
-
+map(
+  1:7,
+  function(i){
+    theta_df <- tibble(
+      media   = apply(theta[, , i], MARGIN = 2, FUN = mean),
+      mediana = apply(theta[, , i], MARGIN = 2, FUN = median),
+      int_baj = apply(theta[, , i], MARGIN = 2, FUN = quantile, probs = 0.025),
+      int_al  = apply(theta[, , i], MARGIN = 2, FUN = quantile, probs = 0.975),
+      var     = levels(x$Division)
+    )
+    p <- ggplot(
+      data = theta_df,
+      aes(
+        x = var
+      )
+    ) +
+      geom_errorbar(
+        aes(
+          ymin   = int_baj,
+          ymax   = int_al
+        )
+      ) +
+      geom_point(aes(y = mediana)) +
+      coord_flip() +
+      theme_bw() +
+      labs(
+        title = paste("Efecto por covariable:", cov_names[i]),
+        x = ""
+      )
+    print(p)
+  }
+)

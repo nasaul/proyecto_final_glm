@@ -15,39 +15,39 @@ df <- read_csv(
 names(df) <- read_table(
   here::here("Datos/nombres.txt"),
   col_names = FALSE
-) %>% 
+) %>%
   mutate(
     var_names = gsub(
-      "(.*) (.*)", 
+      "(.*) (.*)",
       "\\1",
       X2
     )
-  ) %>% 
-  pull(var_names) %>% 
+  ) %>%
+  pull(var_names) %>%
   make.names()
 
 estados <- read_csv(
   here::here("Datos/estados_regiones")
-  ) %>% 
-  select(`State Code`, Division) %>% 
+  ) %>%
+  select(`State Code`, Division) %>%
   rename(State = `State Code`)
 
 
-x <- df %>% 
-  left_join(estados, by = "State") %>% 
+x <- df %>%
+  left_join(estados, by = "State") %>%
   mutate(
     State = State %>% as.factor,
     Division = Division %>% as.factor
-  ) %>% 
+  ) %>%
   select(
     State,
     murders,
     pop,
     Division,
     pctBlack,
-    pctWhite,
+    # pctWhite,
     pctPoverty,
-    pct12.17w2Par,
+    # pct12.17w2Par,
     pctNotSpeakEng,
     pctBornStateResid,
     pctNotHSgrad,
@@ -56,23 +56,23 @@ x <- df %>%
     # pctPolicWhite,
     # pctPolicBlack,
     # officDrugUnits
-  ) %>% 
+  ) %>%
   na.omit()
 
-division <- x %>% 
-  group_by(State, Division) %>% 
-  summarise() %>% 
-  ungroup %>% 
+division <- x %>%
+  group_by(State, Division) %>%
+  summarise() %>%
+  ungroup %>%
   mutate(
       State = as.numeric(State),
       Division = as.numeric(Division)
-  ) %>% 
+  ) %>%
   pull(Division)
 
-xcov <- x %>% 
-  select(-c(State, murders, pop, Division)) %>% 
-  mutate_all(function(x) x /100) %>% 
-  as.matrix 
+xcov <- x %>%
+  select(-c(State, murders, pop, Division)) %>%
+  mutate_all(function(x) x /100) %>%
+  as.matrix
 
 # Segundo modelo ----------------------------------------------------------
 
@@ -126,12 +126,12 @@ modelo_tres <- sampling(
     X = as.matrix(xcov)
   ),
   warmup = 500,
-  iter = 3000,
+  iter = 2000,
   seed = 123456,
   chains = 4,
   thin = 2,
   control = list(
-    adapt_delta = 0.9
+    adapt_delta = 0.95
   )
 )
 
@@ -163,12 +163,11 @@ modelo_cuatro <- sampling(
   iter = 2000,
   seed = 123456,
   chains = 4,
-  thin = 3,
+  thin = 2,
   control = list(
-    adapt_delta = 0.9
+    adapt_delta = 0.99
   )
 )
-modelo_cuatro
 
 saveRDS(
   modelo_cuatro,

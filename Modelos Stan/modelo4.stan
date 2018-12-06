@@ -26,12 +26,12 @@ parameters {
 transformed parameters {
   vector[N] prob;
   for(i in 1:N){
-    prob[i] = exp(beta0[state[i]] + dot_product(row(X, i), row(beta, state[i])));
+    prob[i] = exp(beta0[state[i]] + dot_product(row(X, i), row(theta, state[i])));
   }
 }
 
 model {
-  // Verosimilitud 
+  // Verosimilitud
   for(i in 1:N){
     y[i]~ poisson(n[i] * prob[i]);
   }
@@ -57,7 +57,7 @@ model {
   }
   // Priors vagas
   phi_param ~ normal(0, 10);
-  cov_hiper ~ normal(0, 10);
+  cov_hiper ~ normal(0, 1);
 
 }
 

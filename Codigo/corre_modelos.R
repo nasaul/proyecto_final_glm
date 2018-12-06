@@ -126,12 +126,12 @@ modelo_tres <- sampling(
     X = as.matrix(xcov)
   ),
   warmup = 500,
-  iter = 2000,
+  iter = 3000,
   seed = 123456,
   chains = 4,
-  thin = 2,
+  thin = 4,
   control = list(
-    adapt_delta = 0.95
+    adapt_delta = 0.85
   )
 )
 
@@ -160,12 +160,12 @@ modelo_cuatro <- sampling(
     X = as.matrix(xcov)
   ),
   warmup = 500,
-  iter = 2000,
+  iter = 3000,
   seed = 123456,
   chains = 4,
-  thin = 2,
+  thin = 4,
   control = list(
-    adapt_delta = 0.99
+    adapt_delta = 0.85
   )
 )
 

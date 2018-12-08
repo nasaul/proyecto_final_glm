@@ -1,3 +1,5 @@
+# Lectura de datos --------------------------------------------------------
+
 library(bayesplot)
 library(rstan)
 library(dplyr)
@@ -5,6 +7,7 @@ library(ggplot2)
 library(readr)
 library(loo)
 library(purrr)
+ggplot2::theme_set(theme_bw())
 
 predice <- function(modelo){
   y <- tibble(
@@ -18,6 +21,18 @@ predice <- function(modelo){
         MARGIN = 2,
         FUN    = median
       ),
+    intalto = extract(modelo, "yn")$yn %>%
+      apply(
+        MARGIN = 2,
+        FUN    = quantile,
+        probs = 0.975
+      ),
+    intbajo = extract(modelo, "yn")$yn %>%
+      apply(
+        MARGIN = 2,
+        FUN    = quantile,
+        probs = 0.025
+      ), 
     muertes =  x$murders
   )
   return(y)
@@ -46,8 +61,11 @@ names(df) <- read_table(
 estados <- read_csv(
   here::here("Datos/estados_regiones")
 ) %>%
-  select(`State Code`, Division) %>%
-  rename(State = `State Code`)
+  select(`State Code`, Division, State) %>%
+  rename(
+    Name  = State,
+    State = `State Code`
+    )
 
 
 x <- df %>%
@@ -88,79 +106,109 @@ division <- x %>%
 
 # Modelo dos --------------------------------------------------------------
 
-
 modelo_dos <- readRDS(
   here::here("Resultados/modelo_dos.rds")
 )
 
-predice(modelo_dos) %>%
+mod2_predvsval <- predice(modelo_dos) %>%
+  filter(muertes < 250) %>% 
   ggplot(aes(x = muertes, y = mediana)) +
+  geom_errorbar(aes(ymin = intbajo, ymax = intalto)) +
   geom_point() +
-  geom_line(aes(x = seq(1, 2000, length.out = 2215), y = seq(1, 2000, length.out = 2215)))
+  geom_line(aes(x = seq(1, 250, length.out = 2205), y = seq(1, 250, length.out = 2205))) +
+  labs(
+    title = "Comparación entre valores reales y predicciones del modelo", 
+    x = "Número de Muertes",
+    y = "Predictiva Posterior",
+    subtitle = paste(
+      "WAIC:\t",
+      modelo_dos %>%
+        extract_log_lik() %>%
+        waic() %>%
+        .$waic %>% 
+        round(2)
+    )
+  )
+saveRDS(mod2_predvsval, file = here::here("Resultados/mod2_predvsval.rds"))
 
-modelo_dos %>%
-  extract_log_lik() %>%
-  waic() %>%
-  .$waic
+beta0_m1    <- extract(modelo_dos, pars = "beta0")$beta0
 
-beta0    <- extract(modelo_dos, pars = "beta0")$beta0
-
-beta0_df <- tibble(
-  media   = apply(beta0, MARGIN = 2, FUN = mean),
-  mediana = apply(beta0, MARGIN = 2, FUN = median),
-  int_baj = apply(beta0, MARGIN = 2, FUN = quantile, probs = 0.025),
-  int_al  = apply(beta0, MARGIN = 2, FUN = quantile, probs = 0.975),
-  ymin    = apply(beta0, MARGIN = 2, FUN = min),
-  ymax    = apply(beta0, MARGIN = 2, FUN = max),
-  state   = levels(x$State)
-)
+beta0_df_m1 <- tibble(
+  media   = apply(beta0_m1, MARGIN = 2, FUN = mean),
+  mediana = apply(beta0_m1, MARGIN = 2, FUN = median),
+  int_baj = apply(beta0_m1, MARGIN = 2, FUN = quantile, probs = 0.025),
+  int_al  = apply(beta0_m1, MARGIN = 2, FUN = quantile, probs = 0.975),
+  ymin    = apply(beta0_m1, MARGIN = 2, FUN = min),
+  ymax    = apply(beta0_m1, MARGIN = 2, FUN = max),
+  state   = filter(estados, State %in% levels(x$State)) %>% pull(Name)
+) %>% 
+  mutate_if(is.numeric, ~(exp(.) * 100))
 
 ggplot(
-  data = beta0_df,
+  data = beta0_df_m1,
   aes(
-    x = state
+    y = forcats::fct_rev(reorder(state, state))
   )
 ) +
-  geom_errorbar(
+  geom_errorbarh(
     aes(
-      ymin   = int_baj,
-      ymax   = int_al
+      xmin   = int_baj,
+      xmax   = int_al
     )
   ) +
-  geom_point(aes(y = mediana)) +
-  coord_flip() +
-  theme_bw() +
+  geom_point(aes(x = mediana)) +
   labs(
-    x        = "Probabilidad",
     y        = "Estado",
-    title    = "Probabilidad de asesinato",
+    x        = "Tasa de asesinatos",
+    title    = "Tasa de asesinato por estado",
     subtitle = "Efectos por estado"
-  )
+  ) 
 
-theta    <- extract(modelo_dos, pars = "theta")$theta
+theta_m1    <- extract(modelo_dos, pars = "theta")$theta
 
-theta_df <- tibble(
-  media   = apply(theta, MARGIN = 2, FUN = mean),
-  mediana = apply(theta, MARGIN = 2, FUN = median),
-  int_baj = apply(theta, MARGIN = 2, FUN = quantile, probs = 0.025),
-  int_al  = apply(theta, MARGIN = 2, FUN = quantile, probs = 0.975),
-  ymin    = apply(theta, MARGIN = 2, FUN = min),
-  ymax    = apply(theta, MARGIN = 2, FUN = max),
+theta_df_m1 <- tibble(
+  media   = apply(theta_m1, MARGIN = 2, FUN = mean),
+  mediana = apply(theta_m1, MARGIN = 2, FUN = median),
+  int_baj = apply(theta_m1, MARGIN = 2, FUN = quantile, probs = 0.025),
+  int_al  = apply(theta_m1, MARGIN = 2, FUN = quantile, probs = 0.975),
+  ymin    = apply(theta_m1, MARGIN = 2, FUN = min),
+  ymax    = apply(theta_m1, MARGIN = 2, FUN = max),
   div     = levels(x$Division)
-)
+) %>% 
+  mutate_if(is.numeric, ~(exp(.) * 100))
 
-phi <- extract(modelo_dos, pars = "phi_param")$phi_param
-phi_df <- tibble(
-  media = mean(phi),
-  mediana = median(phi),
-  int_baj = quantile(phi, probs = 0.025),
-  int_al  = quantile(phi, probs = 0.975),
+phi_m1 <- extract(modelo_dos, pars = "phi_param")$phi_param
+phi_df_m1 <- tibble(
+  media = mean(phi_m1),
+  mediana = median(phi_m1),
+  int_baj = quantile(phi_m1, probs = 0.025),
+  int_al  = quantile(phi_m1, probs = 0.975),
   div = "EUA"
-)
+) %>% 
+  mutate_if(is.numeric, ~(exp(.) * 100))
 
 ggplot(
-  data = theta_df %>%
-    full_join(phi_df),
+  data = full_join(
+    theta_df_m1,
+    phi_df_m1,
+    by = c("media", "mediana", "int_baj", "int_al", "div")
+  ) %>% 
+    mutate(
+      div = factor(div, levels = 
+                     c(
+                       "EUA",
+                       "West South Central",
+                       "West North Central",
+                       "South Atlantic",
+                       "Pacific",
+                       "New England",
+                       "Mountain",
+                       "Middle Atlantic",
+                       "East South Central",
+                       "East North Central"
+                     )
+      )
+    ),
   aes(
     x = div
   )
@@ -172,14 +220,12 @@ ggplot(
     )
   ) +
   geom_point(aes(y = mediana)) +
-  geom_hline(aes(yintercept = phi_df$int_baj), colour = "blue") +
-  geom_hline(aes(yintercept = phi_df$int_al), colour = "blue") +
   coord_flip() +
   theme_bw() +
   labs(
-    x        = "Probabilidad",
-    y        = "Estado",
-    title    = "Probabilidad de asesinato",
+    x        = "División",
+    y        = "Tasa de asesinatos",
+    title    = "Tasa de asesinato por división",
     subtitle = "Efectos por división"
   )
 
@@ -191,32 +237,45 @@ modelo_tres <- readRDS(
 )
 
 
-predice(modelo_tres) %>%
+mod3_predvsval <- predice(modelo_tres) %>%
+  filter(muertes < 250) %>% 
   ggplot(aes(x = muertes, y = mediana)) +
+  geom_errorbar(aes(ymin = intbajo, ymax = intalto)) +
   geom_point() +
-  geom_line(aes(x = seq(1, 2000, length.out = 2215), y = seq(1, 2000, length.out = 2215)))
+  geom_line(aes(x = seq(1, 250, length.out = 2205), y = seq(1, 250, length.out = 2205))) +
+  labs(
+    title = "Comparación entre valores reales y predicciones del modelo", 
+    x = "Número de Muertes",
+    y = "Predictiva Posterior",
+    subtitle = paste(
+      "WAIC:\t",
+      modelo_tres %>%
+        extract_log_lik() %>%
+        waic() %>%
+        .$waic %>% 
+        round(2)
+    )
+  )
+saveRDS(mod3_predvsval, file = here::here("Resultados/mod3_predvsval.rds"))
 
-modelo_tres %>%
-  extract_log_lik() %>%
-  waic() %>%
-  .$waic
 
-beta0    <- extract(modelo_tres, pars = "beta0")$beta0
+beta0_m3    <- extract(modelo_tres, pars = "beta0")$beta0
 
-beta0_df <- tibble(
-  media   = apply(beta0, MARGIN = 2, FUN = mean),
-  mediana = apply(beta0, MARGIN = 2, FUN = median),
-  int_baj = apply(beta0, MARGIN = 2, FUN = quantile, probs = 0.025),
-  int_al  = apply(beta0, MARGIN = 2, FUN = quantile, probs = 0.975),
-  ymin    = apply(beta0, MARGIN = 2, FUN = min),
-  ymax    = apply(beta0, MARGIN = 2, FUN = max),
-  state   = levels(x$State)
-)
+beta0_df_m3 <- tibble(
+  media   = apply(beta0_m3, MARGIN = 2, FUN = mean),
+  mediana = apply(beta0_m3, MARGIN = 2, FUN = median),
+  int_baj = apply(beta0_m3, MARGIN = 2, FUN = quantile, probs = 0.025),
+  int_al  = apply(beta0_m3, MARGIN = 2, FUN = quantile, probs = 0.975),
+  ymin    = apply(beta0_m3, MARGIN = 2, FUN = min),
+  ymax    = apply(beta0_m3, MARGIN = 2, FUN = max),
+  state   = filter(estados, State %in% levels(x$State)) %>% pull(Name)
+) %>% 
+  mutate_if(is.numeric, ~exp(.) * 100)
 
 ggplot(
-  data = beta0_df,
+  data = beta0_df_m3,
   aes(
-    x = state
+    x = forcats::fct_rev(reorder(state, state))
   )
 ) +
   geom_errorbar(
@@ -229,40 +288,57 @@ ggplot(
   coord_flip() +
   theme_bw() +
   labs(
-    x        = "Probabilidad",
-    y        = "Estado",
-    title    = "Probabilidad base de asesinato",
-    subtitle = "Efectos por estado"
+    x        = "Estado",
+    y        = "Tasa de asesinatos",
+    title    = "Tasa de asesinato por estado"
   )
 
-theta    <- extract(modelo_tres, pars = "theta")$theta
+theta_m3    <- extract(modelo_tres, pars = "theta")$theta
 
-theta_df <- tibble(
-  media   = apply(theta, MARGIN = 2, FUN = mean),
-  mediana = apply(theta, MARGIN = 2, FUN = median),
-  int_baj = apply(theta, MARGIN = 2, FUN = quantile, probs = 0.025),
-  int_al  = apply(theta, MARGIN = 2, FUN = quantile, probs = 0.975),
-  ymin    = apply(theta, MARGIN = 2, FUN = min),
-  ymax    = apply(theta, MARGIN = 2, FUN = max),
+theta_df_m3 <- tibble(
+  media   = apply(theta_m3, MARGIN = 2, FUN = mean),
+  mediana = apply(theta_m3, MARGIN = 2, FUN = median),
+  int_baj = apply(theta_m3, MARGIN = 2, FUN = quantile, probs = 0.025),
+  int_al  = apply(theta_m3, MARGIN = 2, FUN = quantile, probs = 0.975),
+  ymin    = apply(theta_m3, MARGIN = 2, FUN = min),
+  ymax    = apply(theta_m3, MARGIN = 2, FUN = max),
   div     = levels(x$Division)
-)
+) %>% 
+  mutate_if(is.numeric, ~exp(.) * 100)
 
-phi <- extract(modelo_tres, pars = "phi_param")$phi_param
-phi_df <- tibble(
-  media = mean(phi),
-  mediana = median(phi),
-  int_baj = quantile(phi, probs = 0.025),
-  int_al  = quantile(phi, probs = 0.975),
+phi_m3 <- extract(modelo_tres, pars = "phi_param")$phi_param
+phi_df_m3 <- tibble(
+  media = mean(phi_m3),
+  mediana = median(phi_m3),
+  int_baj = quantile(phi_m3, probs = 0.025),
+  int_al  = quantile(phi_m3, probs = 0.975),
   div = "EUA"
-)
+) %>% 
+  mutate_if(is.numeric, ~exp(.) * 100)
 
 ggplot(
-  data = theta_df %>%
-    full_join(phi_df),
+  data = theta_df_m3 %>%
+    full_join(phi_df_m3) %>% 
+    mutate(
+      div = factor(div, levels = 
+                     c(
+                       "EUA",
+                       "West South Central",
+                       "West North Central",
+                       "South Atlantic",
+                       "Pacific",
+                       "New England",
+                       "Mountain",
+                       "Middle Atlantic",
+                       "East South Central",
+                       "East North Central"
+                     )
+      )
+    ),
   aes(
     x = div
   )
-
+  
 ) +
   geom_errorbar(
     aes(
@@ -271,15 +347,12 @@ ggplot(
     )
   ) +
   geom_point(aes(y = mediana)) +
-  geom_hline(aes(yintercept = phi_df$int_baj), colour = "blue") +
-  geom_hline(aes(yintercept = phi_df$int_al), colour = "blue") +
   coord_flip() +
   theme_bw() +
   labs(
-    x        = "Probabilidad",
-    y        = "Estado",
-    title    = "Probabilidad base de asesinato",
-    subtitle = "Efectos por división"
+    x        = "Estado",
+    y        = "Tasa base de sesinatos",
+    title    = "Tasa base de asesinato por División"
   )
 
 beta <- extract(modelo_tres, pars = "beta")$beta
@@ -293,14 +366,23 @@ beta_df <- tibble(
   int_al  = apply(beta, MARGIN = 2, FUN = quantile, probs = 0.975),
   ymin    = apply(beta, MARGIN = 2, FUN = min),
   ymax    = apply(beta, MARGIN = 2, FUN = max),
-  var     = cov_names
-)
+  var     = cov_names,
+  nombres = case_when(
+    var == "pctBlack"           ~ "Porcentaje de población \nafroamericana",
+    var == "pctPoverty"         ~ "Porcentaje de población \nen pobreza",
+    var == "pctNotSpeakEng"     ~ "Porcentaje de población \nque no habla bien inglés",
+    var == "pctBornStateResid"  ~ "Porcentaje de población \nque vive donde nacio",
+    var == "pctNotHSgrad"       ~ "Porcentaje de población \nque no acabó la preparatoria",
+    var == "pctWorkMom.18"      ~ "Porcentaje de madres\n con hijos menores a 18 años \nque trabajan",
+    var == "pctFgnImmig.10"     ~ "Porcentaje de población \nde inmigrantes que \nllegaron en los últimos 10 años"
+  )
+) 
 
 
-ggplot(
+p <- ggplot(
   data = beta_df,
   aes(
-    x = var
+    x = nombres
   )
 ) +
   geom_errorbar(
@@ -311,13 +393,16 @@ ggplot(
     stat = "identity"
   ) +
   geom_point(aes(y = mediana)) +
-  coord_flip() +
   theme_bw() +
+  coord_flip() +
   labs(
     title = "Parámetros asociados a cada variable",
-    x = ""
+    subtitle = "Intervalos al 95% de credibilidad",
+    x = "",
+    y = ""
   )
 
+saveRDS(p, file = here::here("Resultados/mod3_efectos.rds"))
 
 # Modelo cuatro -----------------------------------------------------------
 
@@ -325,15 +410,27 @@ modelo_cuatro <- readRDS(
   here::here("Resultados/modelo_cuatro.rds")
 )
 
-predice(modelo_cuatro) %>%
+mod4_predvsval <- predice(modelo_cuatro) %>%
+  filter(muertes < 250) %>% 
   ggplot(aes(x = muertes, y = mediana)) +
+  geom_errorbar(aes(ymin = intbajo, ymax = intalto)) +
   geom_point() +
-  geom_line(
-    aes(
-      x = seq(1, 2000, length.out = 2215),
-      y = seq(1, 2000, length.out = 2215)
+  geom_line(aes(x = seq(1, 250, length.out = 2205), y = seq(1, 250, length.out = 2205))) +
+  labs(
+    title = "Comparación entre valores reales y predicciones del modelo", 
+    x = "Número de Muertes",
+    y = "Predictiva Posterior",
+    subtitle = paste(
+      "WAIC:\t",
+      modelo_cuatro %>%
+        extract_log_lik() %>%
+        waic() %>%
+        .$waic %>% 
+        round(2)
     )
   )
+saveRDS(mod4_predvsval, file = here::here("Resultados/mod4_predvsval.rds"))
+
 
 modelo_cuatro %>%
   extract_log_lik() %>%
@@ -378,12 +475,12 @@ ggplot(
 theta0    <- extract(modelo_cuatro, pars = "theta0")$theta0
 
 theta0_df <- tibble(
-  media   = apply(theta, MARGIN = 2, FUN = mean),
-  mediana = apply(theta, MARGIN = 2, FUN = median),
-  int_baj = apply(theta, MARGIN = 2, FUN = quantile, probs = 0.025),
-  int_al  = apply(theta, MARGIN = 2, FUN = quantile, probs = 0.975),
-  ymin    = apply(theta, MARGIN = 2, FUN = min),
-  ymax    = apply(theta, MARGIN = 2, FUN = max),
+  media   = apply(theta0, MARGIN = 2, FUN = mean),
+  mediana = apply(theta0, MARGIN = 2, FUN = median),
+  int_baj = apply(theta0, MARGIN = 2, FUN = quantile, probs = 0.025),
+  int_al  = apply(theta0, MARGIN = 2, FUN = quantile, probs = 0.975),
+  ymin    = apply(theta0, MARGIN = 2, FUN = min),
+  ymax    = apply(theta0, MARGIN = 2, FUN = max),
   div     = levels(x$Division)
 )
 
@@ -397,7 +494,7 @@ phi_df <- tibble(
 )
 
 ggplot(
-  data = theta_df %>%
+  data = theta0_df %>%
     full_join(phi_df),
   aes(
     x = div
@@ -497,3 +594,51 @@ map(
     print(p)
   }
 )
+
+
+cov_hiper <- rstan::extract(modelo_cuatro, pars = "cov_hiper")$cov_hiper
+
+cov_hiper_df <- tibble(
+  media   = apply(cov_hiper, MARGIN = 2, FUN = mean),
+  mediana = apply(cov_hiper, MARGIN = 2, FUN = median),
+  int_baj = apply(cov_hiper, MARGIN = 2, FUN = quantile, probs = 0.025),
+  int_al  = apply(cov_hiper, MARGIN = 2, FUN = quantile, probs = 0.975),
+  ymin    = apply(cov_hiper, MARGIN = 2, FUN = min),
+  ymax    = apply(cov_hiper, MARGIN = 2, FUN = max),
+  var     = cov_names,
+  nombres = case_when(
+    var == "pctBlack"           ~ "Porcentaje de población \nafroamericana",
+    var == "pctPoverty"         ~ "Porcentaje de población \nen pobreza",
+    var == "pctNotSpeakEng"     ~ "Porcentaje de población \nque no habla bien inglés",
+    var == "pctBornStateResid"  ~ "Porcentaje de población \nque vive donde nacio",
+    var == "pctNotHSgrad"       ~ "Porcentaje de población \nque no acabó la preparatoria",
+    var == "pctWorkMom.18"      ~ "Porcentaje de madres\n con hijos menores a 18 años \nque trabajan",
+    var == "pctFgnImmig.10"     ~ "Porcentaje de población \nde inmigrantes que \nllegaron en los últimos 10 años"
+  )
+) 
+
+
+p <- ggplot(
+  data = cov_hiper_df,
+  aes(
+    x = nombres
+  )
+) +
+  geom_errorbar(
+    aes(
+      ymin   = int_baj,
+      ymax   = int_al
+    ),
+    stat = "identity"
+  ) +
+  geom_point(aes(y = mediana)) +
+  theme_bw() +
+  coord_flip() +
+  labs(
+    title = "Hiperparámetros de EUA asociados a cada variable",
+    subtitle = "Intervalos al 95% de credibilidad",
+    x = "",
+    y = ""
+  )
+
+saveRDS(p, file = here::here("Resultados/mod4_efectos.rds"))

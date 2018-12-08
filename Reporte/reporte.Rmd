@@ -11,9 +11,78 @@ output:
     number_sections: true
     toc_depth: 2
 fontsize: 12pt
+header-includes:
+  - \usepackage[spanish]{babel}
+  - \decimalpoint
 documentclass: "article"
-lang: "es"
+bibliography: "references.bib"
 ---
+
+```{r init, echo = FALSE, message = FALSE}
+library(magrittr)
+library(dplyr)
+library(ggplot2)
+library(readr)
+theme_set(theme_bw())
+df <- read_csv(
+  "https://archive.ics.uci.edu/ml/machine-learning-databases/00211/CommViolPredUnnormalizedData.txt",
+  col_names = FALSE,
+  na = "?"
+)
+
+names(df) <- read_table(
+  here::here("Datos/nombres.txt"),
+  col_names = FALSE
+) %>%
+  mutate(
+    var_names = gsub(
+      "(.*) (.*)",
+      "\\1",
+      X2
+    )
+  ) %>%
+  pull(var_names) %>%
+  make.names()
+
+estados <- read_csv(
+  here::here("Datos/estados_regiones")
+) %>%
+  select(`State Code`, Division, State) %>%
+  rename(
+    Name  = State,
+    State = `State Code`
+    )
+
+
+x <- df %>%
+  left_join(estados, by = "State") %>%
+  mutate(
+    State = State %>% as.factor,
+    Division = Division %>% as.factor
+  ) %>%
+  select(
+    State,
+    murders,
+    pop,
+    Division,
+    pctBlack,
+    pctHisp,
+    # pctWhite,
+    pctWhite,
+    pctPoverty,
+    pct12.17w2Par,
+    pctNotSpeakEng,
+    pctBornStateResid,
+    pctNotHSgrad,
+    pctWorkMom.18,
+    pctFgnImmig.10
+    # pctPolicWhite,
+    # pctPolicBlack,
+    # officDrugUnits
+  ) %>%
+  na.omit()
+```
+
 
 \tableofcontents
 
@@ -21,6 +90,595 @@ lang: "es"
 
 # Introducción
 
-# Análisis Exploratorio de los Datos 
+La historia de Estados Unidos de Norteamérica (EUA) en temas de violencia y el crimen tiene raíces mucho más antiguas que los años recientes plagados de titulares en periódicos y noticieros anunciando tiroteos, asesinatos masivos y violencia racial. 
+
+La base de datos “\textit{Communities and Crime Unnormalized Data Set}” combina información de datos censales de 1990 publicados por el \textit{US Census} con los reportes de crimen en al año 1995 publicados por el \textit{FBI}. En este año la tasa de homicidios disminuyo en algunas de las ciudades más violentas de los Estados Unidos de Norteamérica. El 13 de agosto de 1995 el periódico \textit{The New York Times} publicó la noticia titulada \textit{Many Cities in U.S. show sharp drop in homicide rate} \footnote{https://www.nytimes.com/1995/08/13/us/many-cities-in-us-show-sharp-drop-in-homicide-rate.html}, en esta nota se adjudica que la disminución en las tasas fue ocasionada por tácticas políticas más agresivas, incremento del número de criminales en prisión y patrones cambiantes en el uso de drogas.
+
+Este proyecto busca explicar la tasa de asesinatos en los diferentes condados a través de modelos de regresión que consideren efectos por estado, división censal y variables explicativas. Las divisiones censales son las separaciones  regionales indicadas por la oficina del censo de los Estados Unidos de Norteamérica, en la cual se identifican 9 regiones diferentes ( New England, Middle Atlantic, East North Central, West North Central, South Atlantic, East South Central, West South Central, Mountain y Pacific). En particular este trabajo:
+
+  - Realiza un análisis exploratorio univariado y bivariado entre la variable de respuesta y las 9 covariables identificadas.
+  - Explora distintos modelos de regresión para entender las relaciones subyacentes en los datos. 
+  - Interpreta los resultados obtenidos y selecciona el modelo que mejor explique la tasa de crímenes.
+
+\pagebreak
+# Descripción de la base de datos
+
+La base de datos que se utiliza es \textit{Communities and Crime Unnormalized Data Set} la cual se encuentra en la página de UCI \footnote{https://archive.ics.uci.edu/ml/datasets.html}. Esta base contiene muchas variables sociodemográficas por condado, sin embargo, muchas de estas variables tienen valores faltantes por lo que las variables analizadas en este trabajo son: 
+
+  - \textbf{Variable respuesta:}
+    - \textbf{Murders}: Número de asesinatos.
+  - \textbf{Variables explicativas}
+    - \textbf{PctBlack}:              Porcentaje de la población que es Afroamericana.
+    - \textbf{PctWhite}:              Porcentaje de la población que es Caucásica.
+    - \textbf{PctHisp}:               Porcentaje de la población que es Hispana.
+    - \textbf{PctPoverty}:            Porcentaje de la población por debajo de nivel de pobreza.
+    - \textbf{Pct12-17w2Par}:         Porcentaje de niños entre 12 y 17 años que viven con ambos padres.
+    - \textbf{PctNotSpeakEng}:        Porcentaje de la población que no habla bien inglés.
+    - \textbf{PctBornStateResid}:     Porcentaje de de la población que reside en el mismo estado donde nació.
+    - \textbf{GraduatespvtNotHSgrad}: Porcentaje de la población que tiene 25 o más y no se graduó de preparatoria.
+    - \textbf{ForcepctWorkMom.18}:    Porcentaje de madres que trabajan con hijos menores a 18 años.
+    - \textbf{YearspctFgnImmg.10}:    Porcentaje de la población que inmigró en los últimos 10 años.
+
+Adicionalmente se cuenta al condado y estado al que pertenece cada observación. A continuación se muestra los estados presentes en la base de datos y el número de condados de los que se tienen información:
+
+```{r, echo = FALSE, warning = FALSE}
+tabla <- x %>% 
+  group_by(State) %>% 
+  summarise(num = n()) %>% 
+  left_join(estados, by = "State") %>% 
+  rename(Estado = Name) %>% 
+  select(Estado, num) %>% 
+  dplyr::arrange(desc(num)) %>% 
+  rename("Número de condados" = num) 
+  cbind(tabla[1:24, ], tabla[25:48, ]) %>% 
+  knitr::kable(caption = "Estados de EUA") 
+```
+
+A partir de aquí se puede notar que un modelo jerarquico puede combinar la información de estados con más condados, por ejemplo, California con estados que tienen menor cantidad de condados como Columbia, Delaware y Kansas.
+
+Tambíen se muestra el número de estados por división:
+
+```{r, echo = FALSE}
+estados %>% 
+  group_by(Division) %>% 
+  count() %>% 
+  arrange(desc(n)) %>% 
+  rename("División" = Division, "Número de estados" = n) %>% 
+  knitr::kable()
+```
+
+Aquí también se observa que las divisiones con más estados ayudarán en la estimación de los parámetros por división a divisiones con menor número de estados.
+
+\pagebreak
+# Análisis exploratorio de los datos
+
+## Análisis Univariado
+
+Para entender los asesinatos en EUA se muestran las siguientes gráficas que son la tasa de asesinatos dividido entre el número de población por condado. Para facilitar la interpretación se muestran agrupados por división.
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE, fig.height=3.5}
+x %>% 
+  group_by(Division) %>% 
+  mutate(
+    Tasa = 100000 * murders / pop
+  ) %>% 
+  ggplot(
+    aes(
+      x      = forcats::fct_rev(reorder(Division, Division)),
+      y      = Tasa,
+      ymin   = min(Tasa),
+      ymax   = max(Tasa),
+      upper  = quantile(Tasa, probs = 0.975),
+      lower  = quantile(Tasa, probs = 0.025),
+      middle = median(Tasa),
+      group  = forcats::fct_rev(reorder(Division, Division))
+    )
+  ) +
+  geom_boxplot() +
+  coord_flip() +
+  labs(
+    title = "Tasa de asesinatos por cada 100,000 habitantes",
+    subtitle = "Diagrama de caja y brazos por división",
+    y = "Tasa de asesinatos por cada 100,000 habitantes", 
+    x = "División"
+  ) + 
+  guides(fill = FALSE)
+```
+
+A partir de esta gráfica se puede notar que existen condados con tasas altas de asesinatos, para entender un poco más el contexto se realiza el siguiente histograma que solo conserva observaciones menores al cuantil $95$: 
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE, fig.height = 3.4}
+x %>% 
+  mutate(
+    Tasa = 1000000 * murders / pop
+  ) %>% 
+  group_by(Division) %>% 
+  filter(Tasa <= quantile(Tasa, probs = 0.95)) %>% 
+  select(Tasa, Division,) %>% 
+  ggplot(
+    aes(
+      x = Tasa,
+      fill  = forcats::fct_rev(reorder(Division, Division))
+    )
+  ) +
+  geom_histogram(bins = 10, colour = "black") +
+  facet_wrap(~forcats::fct_rev(reorder(Division, Division)), scales = "free") +
+  labs(
+    title = "Histograma de la tasa de asesinatos por cada 100,000 habitantes",
+    x = "Tasa de asesinatos por cada 100,000 habitantes", 
+    y = ""
+  ) +
+  guides(fill = FALSE)
+```
+
+Con esta gráfica se nota que independientemente el estado existen muchos condados con tasa de asesinatos cercana al 0. Esto es un punto importante a notar a la hora del modelado. Además se puede observar que las divisiones con más condados que tienen pocos asesinatos son West North Central, New England, Middle Atlantic y East North Central, sin embargo, siguen teniendo algunos estados con cantidades altas de asesinatos. 
+
+## Análisis Bivariado
+
+El siguiente paso es análizar las posibles relaciones entre la tasa de asesinatos y las variables sociodemográficas. Como ayuda visual se ajustaron modelos simples de la relación entre tasa de asesinatos y la variable gráficada solo para poder entender si la variable tiene o no tiene relación con el fenómeno de asesinatos. Hay que tener mucha precaución con este ajuste pues al no considerar otras variables o efectos por estado puede que la relación observada sea causada por otra variable con la que se tiene correlación.
+
+Primero, se observa la relación entre la tasa de asesinatos y el porcentaje de población afroamericana en el condado:
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE, fig.height=3.5}
+x %>% 
+  mutate(
+    Tasa = murders / pop
+  ) %>% 
+  ggplot(
+    aes(
+      x = pctBlack,
+      y = Tasa
+    )
+  ) +
+  facet_wrap(~forcats::fct_rev(reorder(Division, Division))) +
+  geom_point(
+    aes(
+        colour =forcats::fct_rev(reorder(Division, Division))
+    )
+  ) +
+  geom_smooth(method = "glm", se = FALSE, colour = "black") +
+  labs(
+    title = "Tasa de asesinatos contra porcentaje de población afroamericana",
+    x = "Porcentaje de población afroamericana", 
+    y = "Tasa de Asesinatos"
+  ) +
+  guides(colour = FALSE)
+```
+
+Lo primero a notar es que todos los condados dentro de las divisiones de Mountain, New England, Pacific y West North Central tienen un porcentaje de población afroamericana menor a un $60\%$, lo cual llevaría a pensar que dentro de estas divisiones no existe mucha diversidad racial.
+
+Se observa que todos las divisiones muestran que conforme el porcentaje de población afroamericana incrementa, el porcentaje de asesinatos también aumenta. Además se puede observar que dado un modelo univariado la intensidad con la que afecta esta variable en las distintas divisiones parecen ser distintos.
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE, fig.height=3.5}
+x %>% 
+  mutate(
+    Tasa = murders / pop
+  ) %>% 
+  ggplot(
+    aes(
+      x = pctWhite,
+      y = Tasa
+    )
+  ) +
+  facet_wrap(~forcats::fct_rev(reorder(Division, Division))) +
+  geom_point(
+    aes(
+        colour =forcats::fct_rev(reorder(Division, Division))
+    )
+  ) +
+  geom_smooth(method = "glm", se = FALSE, colour = "black") +
+  labs(
+    title = "Tasa de asesinatos contra porcentaje de población caucásica",
+    x = "Porcentaje de población caucásica", 
+    y = "Tasa de Asesinatos"
+  ) +
+  guides(colour = FALSE)
+```
+
+Con esta gráfica se confirma la hipótesis anterior, que en las divisiones de Mountain, New England y West North Central no hay mucha diversidad racial dentro de los condados de estas divisiones. Esto puede ser un potencial problema para la estimación de los modelos con ambas variables pues estaríamos en el caso de multicolinealidad y potencialmente los efectos de las variables se podría confundir.
+
+Se observa que para todas las divisiones conforme aumenta el porcentaje de personas caucasicas disminuye la tasa de asesinatos.
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE, fig.height=3.5}
+x %>% 
+  mutate(
+    Tasa = murders / pop
+  ) %>% 
+  ggplot(
+    aes(
+      x = pctHisp,
+      y = Tasa
+    )
+  ) +
+  facet_wrap(~forcats::fct_rev(reorder(Division, Division))) +
+  geom_point(
+    aes(
+        colour =forcats::fct_rev(reorder(Division, Division))
+    )
+  ) +
+  geom_smooth(method = "glm", se = FALSE, colour = "black") +
+  labs(
+    title = "Tasa de asesinatos contra porcentaje de población hispana",
+    x = "Porcentaje de población hispana", 
+    y = "Tasa de Asesinatos"
+  ) +
+  guides(colour = FALSE)
+```
+
+Con el porcentaje de población hispana se muestra que existen divisiones que no tienen muchas personas de origen hispano dentro de sus comunidades. Además se observa que el efecto sobre la tasa de asesinatos no es claro, por ejemplo, en East North Central se observa una pendiente positiva, en Mountain una pendiente casi nula y en East South Central negativa, en esta última se podría estar observando este comportamiento debido a la poca cantidad de personas de origen hispano en los condados.
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE, fig.height=3.5}
+x %>% 
+  mutate(
+    Tasa = murders / pop
+  ) %>% 
+  ggplot(
+    aes(
+      x = pctPoverty,
+      y = Tasa
+    )
+  ) +
+  facet_wrap(~forcats::fct_rev(reorder(Division, Division))) +
+  geom_point(
+    aes(
+        colour =forcats::fct_rev(reorder(Division, Division))
+    )
+  ) +
+  geom_smooth(method = "glm", se = FALSE, colour = "black") +
+  labs(
+    title = "Tasa de asesinatos contra porcentaje de población en pobreza",
+    x = "Porcentaje de población en pobreza", 
+    y = "Tasa de Asesinatos"
+  ) +
+  guides(colour = FALSE)
+```
+
+Se puede observar una posible relación positiva entre el porcentaje de población en pobreza y la tasa de asesinatos. New England parece tener los índices de pobreza más bajos de todas las divisiones (menores al $50\%$).
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE, fig.height=3.5}
+x %>% 
+  mutate(
+    Tasa = murders / pop
+  ) %>% 
+  ggplot(
+    aes(
+      x = pct12.17w2Par,
+      y = Tasa
+    )
+  ) +
+  facet_wrap(~forcats::fct_rev(reorder(Division, Division))) +
+  geom_point(
+    aes(
+        colour =forcats::fct_rev(reorder(Division, Division))
+    )
+  ) +
+  geom_smooth(method = "glm", se = FALSE, colour = "black") +
+  labs(
+    title = "Tasa de asesinatos contra porcentaje de niños entre 12 y 17 \naños que cuentan con los dos padres",
+    x = "Porcentaje de niños entre 12 y 17 años que cuentan con los dos padres", 
+    y = "Tasa de Asesinatos"
+  ) +
+  guides(colour = FALSE)
+```
+
+De manera general, todas las divisiones parecen mostrar un comportamiento similar que se puede dividir en dos aspectos relevantes:
+
+  - Los porcentajes de niños que cuentan con ambos padres están ubicados en los valores altos, lo que indica una población mayoritariamente está conformada por familias unidas donde los hijos viven con sus dos padres.
+  - La relación que muestra con la tasa de asesinatos parece ser negativa. 
+  
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE, fig.height=3.5}
+x %>% 
+  mutate(
+    Tasa = murders / pop
+  ) %>% 
+  ggplot(
+    aes(
+      x = pctNotSpeakEng,
+      y = Tasa
+    )
+  ) +
+  facet_wrap(~forcats::fct_rev(reorder(Division, Division))) +
+  geom_point(
+    aes(
+        colour =forcats::fct_rev(reorder(Division, Division))
+    )
+  ) +
+  geom_smooth(method = "glm", se = FALSE, colour = "black") +
+  labs(
+    title = "Tasa de asesinatos contra porcentaje de población que\n no habla bien inglés",
+    x = "Porcentaje de población que no habla bien inglés", 
+    y = "Tasa de Asesinatos"
+  ) +
+  guides(colour = FALSE)
+```
+
+Se observan tres tipos de comportamientos distintos:
+
+  - En las divisiones de East South Central y West North Central tienen porcentajes cercanos a cero, es decir, casi todos hablan bien inglés; sin embargo, las tasas de asesinatos son muy variantes e incluso altas recorriendo desde el $0\%$ hasta alcanzar el $.05\%$.
+  - Las divisiones de East North Central y New England: sus observaciones puntuales muestran porcentajes menores al 15%, es decir,  que sí existe una proporción que no se puede ignorar de personas que hablan mal el inglés. Las observaciones se encuentran variando mucho respecto a la tasa de asesinatos. Se trata por lo tanto de un comportamiento o patrones no concluyentes respecto a la relación entre ambas variables. 
+  - Las divisiones de Middle Atlantic, Mountain, Pacific, South Atlantic y West South Central muestran porcentajes más altos de personas que hablan mal el inglés (alcanzando hasta 40%). Mientras que en casi todas las divisiones no parece haber una relación directa con la tasa de asesinatos, las división de Pacific parecería sí tener una mayor tasa de asesinatos a mayor porcentaje de personas que no hablan bien el inglés.
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE, fig.height=3.5}
+x %>% 
+  mutate(
+    Tasa = murders / pop
+  ) %>% 
+  ggplot(
+    aes(
+      x = pctBornStateResid,
+      y = Tasa
+    )
+  ) +
+  facet_wrap(~forcats::fct_rev(reorder(Division, Division))) +
+  geom_point(
+    aes(
+        colour =forcats::fct_rev(reorder(Division, Division))
+    )
+  ) +
+  geom_smooth(method = "glm", se = FALSE, colour = "black") +
+  labs(
+    title = "Tasa de asesinatos contra porcentaje de la población\n que vive donde nació",
+    x = "Porcentaje de la población que vive donde nació", 
+    y = "Tasa de Asesinatos"
+  ) +
+  guides(colour = FALSE)
+```
+
+  - En las divisiones de East North Central, East South Central y West North Central existen muchas personas oriundas de su división. No existe una relación evidente con la tasa de asesinatos ya que las tasas altas de asesinatos se encuentran dispersas sin importar si existen altos o bajos porcentajes de personas oriundas. Para la división de East South Central parece haber una ligera tendencia creciente.
+  - Las divisiones de Middle Atlantic, Mountain y New England tienen comportamientos muy planos ya que los porcentajes de oriundos cubren un espectro muy amplio (desde el 0% hasta poco más del 75%) y las tasas de asesinatos para éstos varían mucho sin hacer distinción entre porcentajes altos o bajos de personas oriundas.
+  - La división de Pacific muestra un comportamiento particular: para población oriunda de alrededor del 50%, las tasas de asesinatos son muy altas, pero una vez que las tasas de oriundos se acercan a los extremos, las tasas de asesinatos parecen disminuir. Los datos parecen estar acotados a tasas de oriundos menores al 75% y centrados en tasas del 50%.
+  - Las divisiones de South Atlantic y West South Central: aunque estas divisiones presentan un alto espectro de tasas de oriundos (desde el 0% hasta más del 75%), las aproximaciones lineales muestran una tendencia creciente con la tasa de asesinatos que se comprobará posteriormente con los resultados del modelo.
+  
+De este análisis parece no haber relación directa con un factor de inmigración afecte la tasa de asesinatos, ya que sin importar si las personas son o no originarias de su residencia actual, las tasas de asesinatos son muy dispersas.
 
 
+```{r, echo = FALSE, message = FALSE, warning = FALSE, fig.height=3.5}
+x %>% 
+  mutate(
+    Tasa = murders / pop
+  ) %>% 
+  ggplot(
+    aes(
+      x = pctNotHSgrad,
+      y = Tasa
+    )
+  ) +
+  facet_wrap(~forcats::fct_rev(reorder(Division, Division))) +
+  geom_point(
+    aes(
+        colour =forcats::fct_rev(reorder(Division, Division))
+    )
+  ) +
+  geom_smooth(method = "glm", se = FALSE, colour = "black") +
+  labs(
+    title = "Tasa de asesinatos contra porcentaje de la población de 25\naños o más años que no terminaron la preparatoria",
+    x = "Porcentaje de la población  de 25 años\n o más años que no terminaron la preparatoria", 
+    y = "Tasa de Asesinatos"
+  ) +
+  guides(colour = FALSE)
+```
+
+En todas las divisiones la tasa de asesinatos es baja en condados con bajo porcentaje de población sin preparatoria y  en general en todas las divisiones la tasa de asesinatos tiende a aumentar conforme aumenta el porcentaje de gente sin preparatoria terminada. Este comportamiento es más claro en East North Central y Middle Atlantic, mientras que en las demás divisiones, pese a que también hay una tendencia a aumentar la tasa de asesinatos, los condados con más mortalidad no son los que tienen una proporción más alta de la población sin certificado de preparatoria. 
+
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE, fig.height=3.5}
+x %>% 
+  mutate(
+    Tasa = murders / pop
+  ) %>% 
+  ggplot(
+    aes(
+      x = pctWorkMom.18,
+      y = Tasa
+    )
+  ) +
+  facet_wrap(~forcats::fct_rev(reorder(Division, Division))) +
+  geom_point(
+    aes(
+        colour =forcats::fct_rev(reorder(Division, Division))
+    )
+  ) +
+  geom_smooth(method = "glm", se = FALSE, colour = "black") +
+  labs(
+    title = "Tasa de asesinatos contra porcentaje de madres\n con hijos menores a 18 años que trabajan",
+    x = "Porcentaje de la población de madres con hijos menores a 18 años que trabajan", 
+    y = "Tasa de Asesinatos"
+  ) +
+  guides(colour = FALSE)
+```
+
+El porcentaje de madres con hijos menores a 18 años parece no tener un efecto claro a simple vista. 
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE, fig.height=3.5}
+x %>% 
+  mutate(
+    Tasa = murders / pop
+  ) %>% 
+  ggplot(
+    aes(
+      x = pctFgnImmig.10,
+      y = Tasa
+    )
+  ) +
+  facet_wrap(~forcats::fct_rev(reorder(Division, Division))) +
+  geom_point(
+    aes(
+        colour =forcats::fct_rev(reorder(Division, Division))
+    )
+  ) +
+  geom_smooth(method = "glm", se = FALSE, colour = "black") +
+  labs(
+    title = "Tasa de asesinatos contra porcentaje  de inmigrantes que llegaron \nen los últimos 10 años",
+    x = "Porcentaje de la población de inmigrantes que llegaronen los últimos 10 años", 
+    y = "Tasa de Asesinatos"
+  ) +
+  guides(colour = FALSE)
+```
+
+
+Se identifican los siguientes patrones:
+
+  - Las divisiones de Mountain, New England y West North Central: tienen comportamientos similares. Los porcentajes de inmigrantes están distribuidos ampliamente entre 0% y 100% (solo New England parece tener tasas de inmigrantes menores al 75%) para los cuales existen mayoritariamente tasas bajas menores al 0.05%. No se identifica una relación directa entre ambas variables.
+  - Las divisiones East North Central, South Atlantic y West South Cental: muestran relaciones planas no concluyentes respecto a la relación de la covariable con las tasas de asesinatos. Sin embargo, para estas divisiones, existen algunas o varias observaciones de condados que superan el 0.05% en tasas de asesinatos. 
+  - Las divisiones de East South Central, Middle Atlantic y Pacific: presentan aproximaciones lineales con tendencia creciente; conforme aumentan los porcentajes de inmigrantes en los últimos 10 años, aumentan las tasas de asesinatos. Es interesante el caso de la división de Pacific, ya que de las tres anteriores es aquella con la relación positiva más marcada.
+
+\pagebreak
+# Modelos
+
+Para plantear los modelos sea $y_i$ el número de asesinatos por condado y $n_i$ la población total por condado donde $i \in \{1, \dots , 2215\}$. Para representar los distintos estados se usará el subíndice $s \in \{1, \dots, 48 \}$ y para representar las divisiones se utiliza el subíndice $d \in \{1, \dots, 9\}$. $X_i$ representa un conjunto de covariables por condado y se asume que existen $k$ covariables.
+
+## Modelo de intercepto variante por divisiones sin covariables
+
+
+El objetivo del primer modelo fue tener un modelo sencillo con interceptos variantes por división y sin covaribles para evaluar el desempeño de distintas verosimilitudes y ligas. En particular, se prueban dos verosimilitudes distintas: \textit{Poisson} y \textit{Binomial}. Para los modelos con verosimilitud \textit{Binomial} se prueban las ligas: \textit{logística, probit, log-log} y \textit{log-log complementaria}(clog-log), y para la distribución \textit{Poisson} solo se utiliza la liga logarítmica. Los modelos probados son los siguientes:
+
+\begin{subequations}
+Modelo Poisson
+  \begin{align*}
+    y_i           &\sim Po(n_i \lambda_i)      &i \in \{1, \dots , 2215\}\\
+    \lambda_i     &=    e^{\theta_d}             &i \in \{1, \dots , 2215\}, \; d \in \{1, \dots, 9 \}\\
+    \theta_d      &\sim N(\phi, \sigma^2_{\phi}) &d \in \{1, \dots, 9\} \\
+    \phi          &\sim N(0, 10)\\
+    \sigma_{\phi} &\sim \Gamma(0.001, 0.001)\\
+  \end{align*}
+Modelo Binomial
+  \begin{align*}
+    y_i           &\sim Bin(n_i, \pi_i)          &i \in \{1, \dots , 2215\}\\
+    \pi_i         &= f(\theta_d)                 &i \in \{1, \dots , 2215\}, \; d \in \{1, \dots, 9 \} \\
+    \theta_d      &\sim N(\phi, \sigma^2_{\phi}) &d \in \{1, \dots, 9\} \\
+    \phi          &\sim N(0, 10)\\
+    \sigma_{\phi} &\sim \Gamma(0.001, 0.001)\\
+    f(x)  &= \left\{\begin{matrix}
+      logit^{-1}(x)  \quad &\text{Liga Logistica}\\ 
+      \Phi(x)        \quad &\text{Liga Probit}\\ 
+      e^{-e^{x}}     \quad &\text{Liga log-log}\\ 
+      1 - e^{-e^{x}} \quad &\text{Liga log-log complementaria} \\
+\end{matrix}\right.
+  \end{align*}
+\end{subequations}
+
+Las distribuciones iniciales para los hiperparámetros $\phi$ y $\sigma_\phi$ son distribuciones vagas, es decir, que no contienen mucha información acerca de los hiperparámetros reales. 
+
+Para poder comparar los distintos modelos se utilizó el criterio de información de Watanabe-Akaike (WAIC), el cual se calcula de la siguiente forma: 
+
+$$WAIC = -2 (log(f(y | \theta)) - P)$$
+donde el primer componente es el logaritmo de la predictiva posterior y $P$ es una estimación del número de parámetros efectivos en el modelo [@Gelman_IC]. Como cualquier critério de información se busca el valor más bajo del WAIC.
+
+El WAIC calculado para cada modelo es el siguiente:
+
+```{r waic,echo= FALSE}
+readRDS(here::here("Resultados/desempeño_primeros_modelos.rds")) %>% 
+  rename(
+    Verosimilitud = nombre,
+    Liga          = liga,
+    WAIC          = waic
+  ) %>% 
+  arrange(-WAIC) %>% 
+  knitr::kable(digits = 0)
+```
+
+dado el criterio del WAIC, el mejor modelo es el \textit{Poisson} con liga exponencial. Es por esta razón que para los siguientes modelos se utilizará la verosimilitud \textit{Poisson} con liga \textit{exponencial}.
+
+
+## Modelo de intercepto variante por estado y por división sin covariables 
+
+En este modelo se le agrega una jerarquía al modelo, es decir, ahora los interceptos varían por estado y estos a su vez dependen de los hiperparámetros de las distintas divisiones a las que pertenecen y finalmente al hiperparámetro que representa a EUA. El modelo se define de la siguiente forma:
+
+\begin{align*}
+      y_i           &\sim Po(n_i \lambda_i)               &i \in \{1, \dots , 2215\}\\
+      \lambda_i     &= exp(\beta_s)                       &i \in \{1, \dots , 2215\},    \; s \in \{1, \dots, 48\} \\
+      \beta_s       &\sim N(\theta_d, \sigma^2_{\beta d}) &s \in \{1, \dots, 48\}, \; d \in \{1, \dots, 9 \}\\
+      \theta_d      &\sim N(\phi, \sigma^2_{\phi})        &d \in \{1, \dots, 9\} \\
+      \phi          &\sim N(0, 10)\\
+      \sigma_{\phi} &\sim \Gamma(0.001, 0.001)\\
+\end{align*}
+
+A continuación se muestra el desempeño del modelo:
+
+```{r, echo = FALSE, fig.height=3.5, warning = FALSE}
+p <- read_rds(here::here("Resultados/mod2_predvsval.rds"))
+p
+```
+
+La gráfica muestra la recta de $45°$ la cual representa un modelo predictivo perfecto, y se puede apreciar que los puntos están muy alejados de esta curva, por lo que no es un buen modelo. Por otra parte el WAIC disminuyó a comparación de los primeros modelos, lo cual nos indica que la dirección tomada es la correcta, pero aun falta refinar el modelo.
+
+## Modelo de intercepto variante por estado y división y pendientes fijas
+
+Para empezar a mejorar el modelo se agregaron las siguientes covariables: 
+
+  - Porcentaje de la población que es afroamericana.
+  - Porcentaje de la población por debajo de nivel de pobreza.
+  - Porcentaje de la población que no habla bien inglés.
+  - Porcentaje de de la población que reside en el mismo estado donde nació.
+  - Porcentaje de la población que tiene 25 o más y no se graduó de preparatoria.
+  - Porcentaje de madres que trabajan con hijos menores a 18 años.
+  - Porcentaje de la población que inmigró en los últimos 10 años.
+
+y se planteo el mismo modelo anterior solo que ahora el modelo considera covariables de la siguiente forma: 
+
+\begin{align*}
+      y_i           &\sim Po(n_i \lambda_i)       &i \in \{1, \dots , 2215\}\\
+      \lambda_i     &= exp(\beta_{0s} + X' \beta)    &i \in \{1, \dots , 2215\},    \; s \in \{1, \dots, 48\} \\
+      \beta_{0s}    &\sim N(\theta_{0d}, \sigma^2_{\beta_0 d}) &s \in \{1, \dots, 48\}, \; d \in \{1, \dots, 9 \}\\
+      \theta_{0d}   &\sim N(\phi, \sigma^2_{\phi}) &d \in \{1, \dots, 9\} \\
+      \phi          &\sim N(0, 10)\\
+      \sigma_{\phi} &\sim \Gamma(0.001, 0.001)\\
+      \beta_j       &\sim N(0, 1)  &j \in \{1, \dots , k\}\\
+\end{align*}
+
+El desempeño del modelo es el siguiente: 
+
+```{r, echo = FALSE, fig.height=3.5, warning = FALSE}
+p <- read_rds(here::here("Resultados/mod3_predvsval.rds"))
+p
+```
+
+Se puede observar una reducción dástrica al WAIC y el ajuste del modelo ha mejorado bastante. Además se muestran los parámetros de las covariables dentro del modelo:
+
+```{r, echo = FALSE, fig.height=3.5, warning = FALSE}
+p <- read_rds(here::here("Resultados/mod3_efectos.rds"))
+p
+```
+
+Estas variables se seleccionaron de tal forma que ninguna contuviera en su intervalo de credibilidad al $0$ para confirmar que las variables tuvieran un efecto sobre la tasa de asesinatos. Se puede observar que la variable que más contribuye de manera positiva es el porcentaje de población afroamericana y después la que más contribuye de forma negativa es el porcentaje de madres con hijos menores a 18 que trabajan, esto fue una sorpresa pues no se observaba un efecto claro en el análisis exploratorio de los datos, pero controlando por efectos divisionales, estatales y las demás covariables muestra un efecto negativo en la tasa de asesinatos en EUA.
+
+
+## Modelo de intercepto variante por estado y división y pendientes variables por estado y división
+
+Sea $X_i$ un conjunto de $k$ covariables para la observación $i$, el modelo se define de la siguiente forma:
+
+\begin{align*}
+      y_i           &\sim Po(n_i \lambda_i)       &i \in \{1, \dots , 2215\}\\
+      \lambda_i     &= exp(\beta_{0s} + X' \beta_s)    &i \in \{1, \dots , 2215\},    \; s \in \{1, \dots, 48\} \\
+      \beta_{0s}    &\sim N(\theta_{0d}, \sigma^2_{\beta_0 d}) &s \in \{1, \dots, 48\}, \; d \in \{1, \dots, 9 \}\\
+      \beta_{sj}    &\sim N(\theta_{dj}, \sigma^2_{\beta d}) &s \in \{1, \dots, 48\}, \; d \in \{1, \dots, 9 \}\; j \in \{1, \dots, k \}\\
+      \theta_{0d}   &\sim N(\phi, \sigma^2_{\phi}) &d \in \{1, \dots, 9\} \\
+      \theta_{dj}   &\sim N(\phi_j, \sigma^2_{\phi_j}) &d \in \{1, \dots, 9\} \; j \in \{1, \dots, k \}\\
+      \phi          &\sim N(0, 10)\\
+      \sigma_{\phi} &\sim \Gamma(0.001, 0.001)\\
+      \phi_j        &\sim N(0, 1)  &j \in \{1, \dots , k\}\\
+\end{align*}
+
+A continuación se muestra el resultado predictivo del modelo: 
+
+```{r, echo = FALSE, fig.height=3.5, warning = FALSE}
+p <- read_rds(here::here("Resultados/mod4_predvsval.rds"))
+p
+```
+
+Se puede observar que el WAIC disminuyó, sin embargo, no tuvo una caída tan grande como entre el modelo 3 y el modelo 4. A continuación se muestran los efectos globales para EUA de cada variable: 
+
+```{r, echo = FALSE, fig.height=3.5, warning = FALSE}
+p <- read_rds(here::here("Resultados/mod4_efectos.rds"))
+p
+```
+
+A partir de esta gráfica podemos ver que cuando se dividen los efectos por división y estado de todas las variables no hay contribuciones que no contengan al 0 dentro de su intervalo de credibilidad, por lo que este modelo es poco interpretable y por lo tanto será descartado a pesar que su WAIC sea menor. 
+
+## Modelo seleccionado
+
+Se seleccionó el modelo 3 para modelar la tasa de asesinatos en EUA y por lo tanto aquí es donde se hará la interpretación del modelo.
+
+
+# Referencias

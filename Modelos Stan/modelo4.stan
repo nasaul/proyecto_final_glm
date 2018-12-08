@@ -26,7 +26,7 @@ parameters {
 transformed parameters {
   vector[N] prob;
   for(i in 1:N){
-    prob[i] = exp(beta0[state[i]] + dot_product(row(X, i), row(theta, state[i])));
+    prob[i] = exp(beta0[state[i]] + dot_product(row(X, i), row(beta, state[i])));
   }
 }
 

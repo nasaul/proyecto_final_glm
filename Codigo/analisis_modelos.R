@@ -270,9 +270,9 @@ beta0_df_m3 <- tibble(
   ymax    = apply(beta0_m3, MARGIN = 2, FUN = max),
   state   = filter(estados, State %in% levels(x$State)) %>% pull(Name)
 ) %>% 
-  mutate_if(is.numeric, ~exp(.) * 100)
+  mutate_if(is.numeric, ~exp(.) * 100000)
 
-ggplot(
+beta0_graph <- ggplot(
   data = beta0_df_m3,
   aes(
     x = forcats::fct_rev(reorder(state, state))
@@ -289,10 +289,10 @@ ggplot(
   theme_bw() +
   labs(
     x        = "Estado",
-    y        = "Tasa de asesinatos",
-    title    = "Tasa de asesinato por estado"
+    y        = "Tasa de asesinatos por cada 100,000 habitantes",
+    title    = "Tasa de asesinatos base por estado por cada 100,000 habitantes"
   )
-
+saveRDS(beta0_graph, here::here("Resultados/mod3_tasabase.rds"))
 theta_m3    <- extract(modelo_tres, pars = "theta")$theta
 
 theta_df_m3 <- tibble(
@@ -304,7 +304,7 @@ theta_df_m3 <- tibble(
   ymax    = apply(theta_m3, MARGIN = 2, FUN = max),
   div     = levels(x$Division)
 ) %>% 
-  mutate_if(is.numeric, ~exp(.) * 100)
+  mutate_if(is.numeric, ~exp(.) * 100000)
 
 phi_m3 <- extract(modelo_tres, pars = "phi_param")$phi_param
 phi_df_m3 <- tibble(
@@ -314,9 +314,9 @@ phi_df_m3 <- tibble(
   int_al  = quantile(phi_m3, probs = 0.975),
   div = "EUA"
 ) %>% 
-  mutate_if(is.numeric, ~exp(.) * 100)
+  mutate_if(is.numeric, ~exp(.) * 100000)
 
-ggplot(
+mod3_tasabase_div <- ggplot(
   data = theta_df_m3 %>%
     full_join(phi_df_m3) %>% 
     mutate(
@@ -351,9 +351,11 @@ ggplot(
   theme_bw() +
   labs(
     x        = "Estado",
-    y        = "Tasa base de sesinatos",
-    title    = "Tasa base de asesinato por División"
+    y        = "Tasa base de asesinatos por cada 100,000 habitantes",
+    title    = "Tasa base de asesinato por División por cada 100,000 habitantes"
   )
+
+saveRDS(mod3_tasabase_div, here::here("Resultados/mod3_tasabase_div.rds"))
 
 beta <- extract(modelo_tres, pars = "beta")$beta
 cov_names <- x %>%

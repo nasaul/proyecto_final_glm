@@ -136,7 +136,7 @@ tabla <- x %>%
 
 A partir de aquí se puede notar que un modelo jerarquico puede combinar la información de estados con más condados, por ejemplo, California con estados que tienen menor cantidad de condados como Columbia, Delaware y Kansas.
 
-Tambíen se muestra el número de estados por división:
+También se muestra el número de estados por división:
 
 ```{r, echo = FALSE}
 estados %>% 
@@ -479,7 +479,7 @@ x %>%
         colour =forcats::fct_rev(reorder(Division, Division))
     )
   ) +
-  geom_smooth(method = "glm", se = FALSE, colour = "black") +
+  geom_smooth(method = "lm", se = FALSE, colour = "black") +
   labs(
     title = "Tasa de asesinatos contra porcentaje de madres\n con hijos menores a 18 años que trabajan",
     x = "Porcentaje de la población de madres con hijos menores a 18 años que trabajan", 
@@ -531,7 +531,7 @@ Para plantear los modelos sea $y_i$ el número de asesinatos por condado y $n_i$
 ## Modelo de intercepto variante por divisiones sin covariables
 
 
-El objetivo del primer modelo fue tener un modelo sencillo con interceptos variantes por división y sin covaribles para evaluar el desempeño de distintas verosimilitudes y ligas. En particular, se prueban dos verosimilitudes distintas: \textit{Poisson} y \textit{Binomial}. Para los modelos con verosimilitud \textit{Binomial} se prueban las ligas: \textit{logística, probit, log-log} y \textit{log-log complementaria}(clog-log), y para la distribución \textit{Poisson} solo se utiliza la liga logarítmica. Los modelos probados son los siguientes:
+El objetivo del primer modelo fue tener un modelo sencillo con interceptos variantes por división y sin covariables para evaluar el desempeño de distintas verosimilitudes y ligas. En particular, se prueban dos verosimilitudes distintas: \textit{Poisson} y \textit{Binomial}. Para los modelos con verosimilitud \textit{Binomial} se prueban las ligas: \textit{logística, probit, log-log} y \textit{log-log complementaria}(clog-log), y para la distribución \textit{Poisson} solo se utiliza la liga logarítmica. Los modelos probados son los siguientes:
 
 \begin{subequations}
 Modelo Poisson
@@ -563,7 +563,7 @@ Las distribuciones iniciales para los hiperparámetros $\phi$ y $\sigma_\phi$ so
 Para poder comparar los distintos modelos se utilizó el criterio de información de Watanabe-Akaike (WAIC), el cual se calcula de la siguiente forma: 
 
 $$WAIC = -2 (log(f(y | \theta)) - P)$$
-donde el primer componente es el logaritmo de la predictiva posterior y $P$ es una estimación del número de parámetros efectivos en el modelo [@Gelman_IC]. Como cualquier critério de información se busca el valor más bajo del WAIC.
+donde el primer componente es el logaritmo de la predictiva posterior y $P$ es una estimación del número de parámetros efectivos en el modelo [@Gelman_IC]. Como cualquier criterio de información se busca el valor más bajo del WAIC.
 
 El WAIC calculado para cada modelo es el siguiente:
 
@@ -634,7 +634,7 @@ p <- read_rds(here::here("Resultados/mod3_predvsval.rds"))
 p
 ```
 
-Se puede observar una reducción dástrica al WAIC y el ajuste del modelo ha mejorado bastante. Además se muestran los parámetros de las covariables dentro del modelo:
+Se puede observar una reducción drástrica al WAIC y el ajuste del modelo ha mejorado bastante. Además se muestran los parámetros de las covariables dentro del modelo:
 
 ```{r, echo = FALSE, fig.height=3.5, warning = FALSE}
 p <- read_rds(here::here("Resultados/mod3_efectos.rds"))
@@ -680,5 +680,28 @@ A partir de esta gráfica podemos ver que cuando se dividen los efectos por divi
 
 Se seleccionó el modelo 3 para modelar la tasa de asesinatos en EUA y por lo tanto aquí es donde se hará la interpretación del modelo.
 
+```{r, echo = FALSE, fig.height = 6, warning = FALSE}
+modelo_tres <- read_rds(here::here("Resultados/modelo_tres.rds"))
+p <- readRDS(here::here("Resultados/mod3_tasabase.rds"))
+p +
+  labs(
+    title = "Tasa de asesinatos por estado\n por cada 100,000 habitantes"
+  )
+```
+
+```{r, echo = FALSE, fig.height = 3.5, warning = FALSE}
+p <- readRDS(here::here("Resultados/mod3_tasabase_div.rds"))
+p +
+  labs(
+    title = "Tasa de asesinatos por división\n por cada 100,000 habitantes"
+  )
+```
+
+
 
 # Referencias
+
+---
+nocite: | 
+  @GelmanHill:2007
+...

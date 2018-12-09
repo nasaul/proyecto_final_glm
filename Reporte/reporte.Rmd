@@ -559,6 +559,15 @@ Modelo Binomial
   \end{align*}
 \end{subequations}
 
+\pagebreak
+
+La representación de la jerarquía:
+
+\begin{figure}[h]
+\includegraphics{modelo1.JPG}
+\centering
+\end{figure}
+
 Las distribuciones iniciales para los hiperparámetros $\phi$ y $\sigma_\phi$ son distribuciones vagas, es decir, que no contienen mucha información acerca de los hiperparámetros reales. 
 
 Para poder comparar los distintos modelos se utilizó el criterio de información de Watanabe-Akaike (WAIC), el cual se calcula de la siguiente forma: 
@@ -598,6 +607,13 @@ En este modelo se le agrega una jerarquía al modelo, es decir, ahora los interc
       \sigma_{\phi} &\sim \Gamma(0.001, 0.001)\\
 \end{align*}
 
+La representación de la jerarquía:
+
+\begin{figure}[h]
+\includegraphics{modelo2.JPG}
+\centering
+\end{figure}
+
 A continuación se muestra el desempeño del modelo:
 
 ```{r, echo = FALSE, fig.height=3.5, warning = FALSE}
@@ -630,6 +646,13 @@ y se planteo el mismo modelo anterior solo que ahora el modelo considera covaria
       \sigma_{\phi} &\sim \Gamma(0.001, 0.001)\\
       \beta_j       &\sim N(0, 1)  &j \in \{1, \dots , k\}\\
 \end{align*}
+
+A continuación se muestra la representación de la jerarquía:
+
+\begin{figure}[h]
+\includegraphics{modelo3.JPG}
+\centering
+\end{figure}
 
 Es importante recalcar que tanto en este modelo como en el siguiente, los parámetros asociados a las desviaciones estándar tienen una inicial impropia sobre todos los reales positivos esta decisión fue tomada porque Stan converge mejor a la posterior con este tipo de inciales \footnote{https://github.com/stan-dev/stan/wiki/Prior-Choice-Recommendations}.
 
@@ -664,6 +687,13 @@ Sea $X_i$ un conjunto de $k$ covariables para la observación $i$, el modelo se 
       \sigma_{\phi} &\sim \Gamma(0.001, 0.001)\\
       \phi_j        &\sim N(0, 1)  &j \in \{1, \dots , k\}\\
 \end{align*}
+
+A continuación se muestra la representación de la jerarquía:
+
+\begin{figure}[h]
+\includegraphics{modelo4.JPG}
+\centering
+\end{figure}
 
 A continuación se muestra el resultado predictivo del modelo: 
 
@@ -850,6 +880,9 @@ En este trabajo se presentan 4 tipos de modelos: en el primero, un modelo muy se
 Un hayazgo importante fue que a pesar de que el modelo 4 mostraba un mejor desempeño ante la métrica de WAIC, los resultados generados por este modelo pueden ser considerados como ruido estadístico y por lo tanto no poder concluir nada. Es por esto que se seleccionó un modelo más simple, pero con mayor interpretación.
 
 Finalmente, el trabajo presente podría mejorarse si: se agregan más covariables, usar una incial equivalente al problema de Ridge o usar un modelo Poisson inflado hacia el $0$. Sin embargo, se considero que se tiene un modelo que explica las tasas de asesinatos en EUA y que además controla por divisones y estados dentro del país. 
+
+
+\pagebreak 
 
 # Referencias
 

@@ -570,6 +570,9 @@ El WAIC calculado para cada modelo es el siguiente:
 
 ```{r waic,echo= FALSE}
 readRDS(here::here("Resultados/desempeño_primeros_modelos.rds")) %>% 
+  mutate(
+    liga = if_else(liga == "Exponencial", "Logarítmica", liga)
+  ) %>% 
   rename(
     Verosimilitud = nombre,
     Liga          = liga,
@@ -579,7 +582,7 @@ readRDS(here::here("Resultados/desempeño_primeros_modelos.rds")) %>%
   knitr::kable(digits = 0)
 ```
 
-dado el criterio del WAIC, el mejor modelo es el \textit{Poisson} con liga exponencial. Es por esta razón que para los siguientes modelos se utilizará la verosimilitud \textit{Poisson} con liga \textit{exponencial}.
+dado el criterio del WAIC, el mejor modelo es el \textit{Poisson} con liga logarítmica. Es por esta razón que para los siguientes modelos se utilizará la verosimilitud \textit{Poisson} con liga \textit{logarítmica}.
 
 
 ## Modelo de intercepto variante por estado y por división sin covariables 
@@ -628,6 +631,8 @@ y se planteo el mismo modelo anterior solo que ahora el modelo considera covaria
       \beta_j       &\sim N(0, 1)  &j \in \{1, \dots , k\}\\
 \end{align*}
 
+Es importante recalcar que tanto en este modelo como en el siguiente, los parámetros asociados a las desviaciones estándar tienen una inicial impropia sobre todos los reales positivos esta decisión fue tomada porque Stan converge mejor a la posterior con este tipo de inciales \footnote{https://github.com/stan-dev/stan/wiki/Prior-Choice-Recommendations}.
+
 El desempeño del modelo es el siguiente: 
 
 ```{r, echo = FALSE, fig.height=3.5, warning = FALSE}
@@ -643,7 +648,6 @@ p
 ```
 
 Estas variables se seleccionaron de tal forma que ninguna contuviera en su intervalo de credibilidad al $0$ para confirmar que las variables tuvieran un efecto sobre la tasa de asesinatos. Se puede observar que la variable que más contribuye de manera positiva es el porcentaje de población afroamericana y después la que más contribuye de forma negativa es el porcentaje de madres con hijos menores a 18 que trabajan, esto fue una sorpresa pues no se observaba un efecto claro en el análisis exploratorio de los datos, pero controlando por efectos divisionales, estatales y las demás covariables muestra un efecto negativo en la tasa de asesinatos en EUA.
-
 
 ## Modelo de intercepto variante por estado y división y pendientes variables por estado y división
 
@@ -679,10 +683,9 @@ A partir de esta gráfica podemos ver que cuando se dividen los efectos por divi
 
 ## Modelo seleccionado
 
-<!-- Se seleccionó el modelo 3 (Modelo de intercepto variante por estado y división y pendientes fijas) para modelar la tasa de asesinatos en EUA. En este modelo se agregan las 7 variables explicativas que muestran tener un impacto sobre la tasa de asesinatos. -->
+Se seleccionó el modelo 3 (Modelo de intercepto variante por estado y división y pendientes fijas) para modelar la tasa de asesinatos en EUA. En este modelo se agregan las $7$ variables explicativas que muestran tener un impacto sobre la tasa de asesinatos.
 
-<!-- En el primer esquema, se ubican las tasas base de asesinatos por cada $100,000$ habitantes $100,000e^{\beta_0^s}$ para cada uno de los 48 estados. Se observa que hay mucha homogeneidad de los interceptos en cuestiones de intervalos de confianza, lo cual llega a pensar que controlando por las covariables usadas, los estados no son tan distintos. Sin embargo, Existen estados comom Kansas, Missouri, Nevada y New México que están por encima del promedio de los parámetros  -->
-
+En el primer esquema, se ubican las tasas base de asesinatos por cada $100,000$ habitantes, i.e. $100,000e^{\beta_{0s}}$, para cada uno de los 48 estados. Sin embargo, para estados de Kansas, Missouri, Nevada y New Mexico, los parámetros parecen tener un valor mayor al de la mayoría, esto es bueno pues quiere decir que es probable que falten variables para explicar el fénomeno y lo está capturando el intercepto del estado, algo que no podría hacer un modelo no jerárquico.
 
 ```{r, echo = FALSE, fig.height = 6, warning = FALSE}
 modelo_tres <- read_rds(here::here("Resultados/modelo_tres.rds"))
@@ -694,13 +697,18 @@ p +
   labs(
     title = "Tasa de asesinatos por estado\n por cada 100,000 habitantes"
   )
+```
+
+A continuación se muestran los valores de los interceptos por estado con un intervalo al $95\%$ de credibilidad. Además se muestra la Rhat que es un criterio de convergencia de las cadenas de Markov y el número efectivo de observaciones para cada parámetro:
+
+```{r, echo = FALSE}
 tabla_modelo %>%
   filter(grepl("beta0.*", parametros)) %>% 
   mutate(
     Parámetros = 
       paste(
         "$\\beta_{0,\\text{",
-        estados$Name[as.numeric(gsub(".*\\[(.*)\\]", "\\1", parametros))],
+        filter(estados, State %in% levels(x$State))$Name[as.numeric(gsub(".*\\[(.*)\\]", "\\1", parametros))],
         "}}$",
         sep = ""
       )
@@ -712,6 +720,10 @@ tabla_modelo %>%
   ) %>% 
   knitr::kable(digits = c(0, 2, 2, 2, 0, 0))
 ```
+
+De toda la tabla se aprecia que todas las cadenas de Markov convergen bajo el criterio de Rhat, pues todas son 1. El tamaño mínimo de muestra efectiva fue de $380$ lo cual tiende a ocurrir en la estimación de modelos jerarquicos y es lo suficiente para poder hacer inferencia. 
+
+Para este segundo esquema, se graficaron los parámetros $\theta_{0,d}$resultantes para cada una de las 9 divisiones y el parámetro $\Phi$ global para capturar el efecto sobre los Estados Unidos de manera completa. Los intervalos obtenidos muestran poco movimiento de la tasa base ya que todas las medias fluctúan en un mismo rango de valores entre aproximadamente 10 y 15 sobre la tasa base de asesinatos.
 
 ```{r, echo = FALSE, fig.height = 3.5, warning = FALSE}
 p <- readRDS(here::here("Resultados/mod3_tasabase_div.rds"))
@@ -739,8 +751,9 @@ tabla_modelo %>%
   knitr::kable(digits = c(0, 2, 2, 2, 0, 0))
 ```
 
-Efectos de las covariables
+Cabe mencionar que estos parámetros no tienen mucha interpretación pues corresponden al caso donde todas las covariables $x = 0$ y como esto no es posible no es correcto interpretar los parámetros.
 
+A continuación se muestra los diagnósticos de convergencia de los parámetros asociados a la pendiente de cada variable:
 
 ```{r, echo = FALSE}
 cov_names <- df %>%
@@ -809,13 +822,34 @@ cov <- tabla_modelo %>%
     "Tamaño de muestra efectiva" = n_eff
   )
 cov %>% 
-  select("Parámetro asociado al porcentaje de...", Promedio, `2.5%`, `97.5%`) %>% 
-knitr::kable(digits = c(0, 2, 2, 2))
-cov %>% 
   select("Parámetro asociado al porcentaje de...", "Tamaño de muestra efectiva", Rhat) %>% 
   knitr::kable(digits = c(0, 0, 0))
 ```
 
+Se observa que para todos los parámetros se tiene una Rhat igual a 1, entonces bajo este criterio tenemos convergencia de las cadenas. Además muestra que el tamaño efectivo de muestra mínimo es de $558$ por lo tanto se puede realizar la inferencia con los parámetros estimados.
+
+Ahora se presentan los efectos de los covariables y se realizará su interpretación. Para esto es necesario considerar que en el modelo las covariables se introdujeron en el rango del $[0, 1]$ por lo tanto la interpretación será la siguiente ante un aumento del $1\%$ de una variable explicativa $x_i$ se obtendrá un cambio en la tasa $y$ del $exp(.01 * \beta_i)$.
+```{r,echo=FALSE}
+cov %>% 
+  select("Parámetro asociado al porcentaje de...", Promedio, `2.5%`, `97.5%`) %>% 
+knitr::kable(digits = c(0, 2, 2, 2))
+```
+
+  - \textbf{Porcentaje de población afroamericana}: ante un aumento del $1\%$ de población afroamericana dentro de un condado se tiene un aumento en la tasa de asesinatos de $`r round(((exp(3.40 * .01) -1) * 100), 2)`\%$.
+  - \textbf{Porcentaje de población en pobreza}: ante un aumento del $1\%$ de población en pobreza dentro de un condado se tiene un aumento en la tasa de asesinatos del $`r round(((exp(1.24 * .01) -1) * 100), 2)`\%$.
+  - \textbf{Porcentaje de población que no habla bien inglés}: ante un aumento del $1\%$ de población que no habla bien inglés dentro de un condado se tiene un aumento en la tasa de asesinatos de $`r round(((exp(1.59 * .01) -1) * 100), 2)`\%$.
+  - \textbf{Porcentaje de población que vive donde nació}: ante un aumento del $1\%$ de población que vive donde nació dentro de un condado se tiene una disminución en la tasa de asesinatos de $`r round((1- exp(-.31*.01)) * 100, 2)`\%$.
+  - \textbf{Porcentaje de población que no acabó la preparatoria}: ante un aumento del $1\%$ de población que no acabó la preparatoria dentro de un condado se tiene un aumento en la tasa de asesinatos de $`r round(((exp(1.07 * .01) -1) * 100), 2)`\%$.
+  - \textbf{Porcentaje de madres con hijos menores a 18 años que trabajan}: ante un aumento del $1\%$ de población afroamericana dentro de un condado se tiene una disminución en la tasa de asesinatos de $`r round((1- exp(-2.17*.01)) * 100, 2)`\%$
+  - \textbf{Porcentaje de población inmigrante que llegaron en los últimos 10 años}: ante un aumento del $1\%$ de población inmigrante que llegaron en los últimos 10 años dentro de un condado se tiene un aumento en la tasa de asesinatos de $`r round(((exp(0.87 * .01) -1) * 100), 2)`\%$.
+
+# Conclusiones
+
+En este trabajo se presentan 4 tipos de modelos: en el primero, un modelo muy sencillo del cual no se pueden obtener conclusiones distintas a lo que haría un resumen de una tabla, sin embargo, funcionó para elegir la liga y la verosimilitud; el segundo, sirvió para agregar un nivel a la jerarquía y ver que era el camino correcto para mejorar el modelo; el tercer modelo, nos sirivió para observar efectos de las covariables que se usaron; el último modelo, nos sirvió para ver si mayor complejidad dentro de los efectos de las covariables mejoraba la forma de explicar la tasa de asesinatos en EUA. 
+
+Un hayazgo importante fue que a pesar de que el modelo 4 mostraba un mejor desempeño ante la métrica de WAIC, los resultados generados por este modelo pueden ser considerados como ruido estadístico y por lo tanto no poder concluir nada. Es por esto que se seleccionó un modelo más simple, pero con mayor interpretación.
+
+Finalmente, el trabajo presente podría mejorarse si: se agregan más covariables, usar una incial equivalente al problema de Ridge o usar un modelo Poisson inflado hacia el $0$. Sin embargo, se considero que se tiene un modelo que explica las tasas de asesinatos en EUA y que además controla por divisones y estados dentro del país. 
 
 # Referencias
 

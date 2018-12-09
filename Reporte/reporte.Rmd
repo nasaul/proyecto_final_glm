@@ -81,6 +81,7 @@ x <- df %>%
     # officDrugUnits
   ) %>%
   na.omit()
+
 ```
 
 
@@ -678,15 +679,38 @@ A partir de esta gráfica podemos ver que cuando se dividen los efectos por divi
 
 ## Modelo seleccionado
 
-Se seleccionó el modelo 3 para modelar la tasa de asesinatos en EUA y por lo tanto aquí es donde se hará la interpretación del modelo.
+<!-- Se seleccionó el modelo 3 (Modelo de intercepto variante por estado y división y pendientes fijas) para modelar la tasa de asesinatos en EUA. En este modelo se agregan las 7 variables explicativas que muestran tener un impacto sobre la tasa de asesinatos. -->
+
+<!-- En el primer esquema, se ubican las tasas base de asesinatos por cada $100,000$ habitantes $100,000e^{\beta_0^s}$ para cada uno de los 48 estados. Se observa que hay mucha homogeneidad de los interceptos en cuestiones de intervalos de confianza, lo cual llega a pensar que controlando por las covariables usadas, los estados no son tan distintos. Sin embargo, Existen estados comom Kansas, Missouri, Nevada y New México que están por encima del promedio de los parámetros  -->
+
 
 ```{r, echo = FALSE, fig.height = 6, warning = FALSE}
 modelo_tres <- read_rds(here::here("Resultados/modelo_tres.rds"))
+tabla_modelo <- rstan::summary(modelo_tres)$summary %>% 
+  as.data.frame() %>% 
+  tibble::rownames_to_column(var = "parametros")
 p <- readRDS(here::here("Resultados/mod3_tasabase.rds"))
 p +
   labs(
     title = "Tasa de asesinatos por estado\n por cada 100,000 habitantes"
   )
+tabla_modelo %>%
+  filter(grepl("beta0.*", parametros)) %>% 
+  mutate(
+    Parámetros = 
+      paste(
+        "$\\beta_{0,\\text{",
+        estados$Name[as.numeric(gsub(".*\\[(.*)\\]", "\\1", parametros))],
+        "}}$",
+        sep = ""
+      )
+  ) %>% 
+  select(Parámetros, mean, `2.5%`, `97.5%`, n_eff, Rhat) %>% 
+  rename(
+    "Promedio" = "mean",
+    "Tamaño de muestra efectiva" = n_eff
+  ) %>% 
+  knitr::kable(digits = c(0, 2, 2, 2, 0, 0))
 ```
 
 ```{r, echo = FALSE, fig.height = 3.5, warning = FALSE}
@@ -695,8 +719,102 @@ p +
   labs(
     title = "Tasa de asesinatos por división\n por cada 100,000 habitantes"
   )
+
+tabla_modelo %>%
+  filter(grepl("theta\\[.*\\]", parametros)) %>% 
+  mutate(
+    Parámetros = 
+      paste(
+        "$\\theta_{0,\\text{",
+        levels(x$Division)[as.numeric(gsub(".*\\[(.*)\\]", "\\1", parametros))],
+        "}}$",
+        sep = ""
+      )
+  ) %>% 
+  select(Parámetros, mean, `2.5%`, `97.5%`, n_eff, Rhat) %>% 
+  rename(
+    "Promedio" = "mean",
+    "Tamaño de muestra efectiva" = n_eff
+  ) %>% 
+  knitr::kable(digits = c(0, 2, 2, 2, 0, 0))
 ```
 
+Efectos de las covariables
+
+
+```{r, echo = FALSE}
+cov_names <- df %>%
+  left_join(estados, by = "State") %>%
+  mutate(
+    State = State %>% as.factor,
+    Division = Division %>% as.factor
+  ) %>%
+  select(
+    State,
+    murders,
+    pop,
+    Division,
+    pctBlack,
+    pctHisp,
+    # pctWhite,
+    pctWhite,
+    pctPoverty,
+    pct12.17w2Par,
+    pctNotSpeakEng,
+    pctBornStateResid,
+    pctNotHSgrad,
+    pctWorkMom.18,
+    pctFgnImmig.10
+    # pctPolicWhite,
+    # pctPolicBlack,
+    # officDrugUnits
+  ) %>%
+  select(
+    State,
+    murders,
+    pop,
+    Division,
+    pctBlack,
+    # pctWhite,
+    pctPoverty,
+    # pct12.17w2Par,
+    pctNotSpeakEng,
+    pctBornStateResid,
+    pctNotHSgrad,
+    pctWorkMom.18,
+    pctFgnImmig.10
+    # pctPolicWhite,
+    # pctPolicBlack,
+    # officDrugUnits
+  ) %>% 
+  select(-c(State, murders, pop, Division)) %>%
+  names
+cov <- tabla_modelo %>%
+  filter(grepl("beta\\[.*\\]", parametros)) %>% 
+  mutate(
+    var = cov_names,
+    "Parámetro asociado al porcentaje de..." = case_when(
+      var == "pctBlack"           ~ "Población afroamericana",
+      var == "pctPoverty"         ~ "Pooblación en pobreza",
+      var == "pctNotSpeakEng"     ~ "Población que no habla bien inglés",
+      var == "pctBornStateResid"  ~ "Población que vive donde nacio",
+      var == "pctNotHSgrad"       ~ "Población que no acabó la preparatoria",
+      var == "pctWorkMom.18"      ~ "Madres con hijos menores a 18 años que trabajan",
+      var == "pctFgnImmig.10"     ~ "Población de inmigrantes que llegaron en los últimos 10 años"
+    )
+  ) %>% 
+  select("Parámetro asociado al porcentaje de...", mean, `2.5%`, `97.5%`, n_eff, Rhat) %>% 
+  rename(
+    "Promedio" = "mean",
+    "Tamaño de muestra efectiva" = n_eff
+  )
+cov %>% 
+  select("Parámetro asociado al porcentaje de...", Promedio, `2.5%`, `97.5%`) %>% 
+knitr::kable(digits = c(0, 2, 2, 2))
+cov %>% 
+  select("Parámetro asociado al porcentaje de...", "Tamaño de muestra efectiva", Rhat) %>% 
+  knitr::kable(digits = c(0, 0, 0))
+```
 
 
 # Referencias
